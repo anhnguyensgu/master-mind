@@ -10,7 +10,8 @@ export interface Spinner {
   isActive(): boolean;
 }
 
-export function createSpinner(): Spinner {
+export function createSpinner(write?: (text: string) => void): Spinner {
+  const output = write ?? ((text: string) => { process.stdout.write(text); });
   let timer: ReturnType<typeof setInterval> | null = null;
   let frameIndex = 0;
   let currentMessage = '';
@@ -19,7 +20,7 @@ export function createSpinner(): Spinner {
   function render() {
     const frame = FRAMES[frameIndex % FRAMES.length]!;
     frameIndex++;
-    process.stdout.write(
+    output(
       `\r${erase.lineEnd}${theme.accent}${frame}${colors.reset} ${theme.muted}${currentMessage}${colors.reset}`
     );
   }
@@ -30,7 +31,7 @@ export function createSpinner(): Spinner {
       active = true;
       currentMessage = message;
       frameIndex = 0;
-      process.stdout.write(cursor.hide);
+      output(cursor.hide);
       render();
       timer = setInterval(render, INTERVAL_MS);
     },
@@ -46,9 +47,9 @@ export function createSpinner(): Spinner {
         clearInterval(timer);
         timer = null;
       }
-      process.stdout.write(`\r${erase.lineEnd}${cursor.show}`);
+      output(`\r${erase.lineEnd}${cursor.show}`);
       if (finalMessage) {
-        process.stdout.write(`${finalMessage}\n`);
+        output(`${finalMessage}\n`);
       }
     },
 

@@ -44,6 +44,7 @@ export const cursor = {
   clearLine: `${ESC}2K`,
   clearDown: `${ESC}J`,
   moveToColumn: (n: number) => `${ESC}${n}G`,
+  moveTo: (row: number, col: number) => `${ESC}${row};${col}H`,
   saveCursor: `${ESC}s`,
   restoreCursor: `${ESC}u`,
 } as const;
@@ -52,6 +53,14 @@ export const erase = {
   line: `${ESC}2K`,
   lineEnd: `${ESC}K`,
   screen: `${ESC}2J`,
+} as const;
+
+export const screen = {
+  setScrollRegion: (top: number, bottom: number) => `${ESC}${top};${bottom}r`,
+  resetScrollRegion: `${ESC}r`,
+  scrollUp: (n = 1) => `${ESC}${n}S`,
+  alternateBuffer: `${ESC}?1049h`,
+  mainBuffer: `${ESC}?1049l`,
 } as const;
 
 // Semantic colors for the application

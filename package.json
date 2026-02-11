@@ -4,7 +4,8 @@
   "type": "module",
   "private": true,
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/react": "^19.2.14"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -15,8 +16,11 @@
   "scripts": {
     "dev": "bun --hot src/main.ts",
     "start": "bun src/main.ts",
-    "cli": "bun src/cli/cli.ts",
+    "cli": "LLM_PROVIDER=mock bun --watch src/cli/cli.ts",
     "test": "bun test"
   },
-  "dependencies": {}
+  "dependencies": {
+    "ink": "^6.7.0",
+    "react": "^19.2.4"
+  }
 }
