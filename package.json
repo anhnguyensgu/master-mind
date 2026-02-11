@@ -9,9 +9,13 @@
   "peerDependencies": {
     "typescript": "^5"
   },
+  "bin": {
+    "master-mind": "src/cli/cli.ts"
+  },
   "scripts": {
     "dev": "bun --hot src/main.ts",
     "start": "bun src/main.ts",
+    "cli": "bun src/cli/cli.ts",
     "test": "bun test"
   },
   "dependencies": {}
