@@ -17,7 +17,6 @@ import { createResourceMetricsTool } from '../agent/tools/resource-metrics';
 import { createOptimizationTool } from '../agent/tools/optimization';
 import type { Renderer } from './renderer';
 import type { Spinner } from './spinner';
-import { theme, colors } from './theme';
 import { App } from './App';
 
 export function buildAgent(config: MasterMindConfig, renderer: Renderer, spinner: Spinner): Agent {
@@ -90,8 +89,7 @@ export function handleSlashCommand(command: string, agent: Agent, renderer: Rend
       } else {
         renderer.newline();
         for (const entry of history) {
-          const roleColor = entry.role === 'user' ? theme.prompt : theme.assistant;
-          renderer.info(`  ${roleColor}${entry.role}${colors.reset}: ${entry.summary}`);
+          renderer.info(`  ${entry.role}: ${entry.summary}`);
         }
         renderer.newline();
       }

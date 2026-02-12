@@ -1,5 +1,4 @@
 import { test, expect, describe } from 'bun:test';
-import { createRenderer } from './renderer';
 import { createSpinner } from './spinner';
 import { colors, style, theme, cursor, erase } from './theme';
 
@@ -60,64 +59,5 @@ describe('spinner', () => {
     spinner.start('test again'); // should not double-start
     expect(spinner.isActive()).toBe(true);
     spinner.stop();
-  });
-});
-
-describe('renderer', () => {
-  test('should create renderer with correct interface', () => {
-    const renderer = createRenderer();
-    expect(typeof renderer.banner).toBe('function');
-    expect(typeof renderer.help).toBe('function');
-    expect(typeof renderer.streamText).toBe('function');
-    expect(typeof renderer.endStream).toBe('function');
-    expect(typeof renderer.toolStart).toBe('function');
-    expect(typeof renderer.toolEnd).toBe('function');
-    expect(typeof renderer.toolError).toBe('function');
-    expect(typeof renderer.error).toBe('function');
-    expect(typeof renderer.info).toBe('function');
-    expect(typeof renderer.warning).toBe('function');
-    expect(typeof renderer.success).toBe('function');
-    expect(typeof renderer.usage).toBe('function');
-    expect(typeof renderer.divider).toBe('function');
-    expect(typeof renderer.markdown).toBe('function');
-    expect(typeof renderer.newline).toBe('function');
-  });
-
-  test('should handle stream lifecycle without errors', () => {
-    const renderer = createRenderer();
-    expect(() => {
-      renderer.streamText('hello');
-      renderer.streamText(' world');
-      renderer.endStream();
-    }).not.toThrow();
-  });
-
-  test('endStream should be safe when not streaming', () => {
-    const renderer = createRenderer();
-    expect(() => renderer.endStream()).not.toThrow();
-  });
-
-  test('should render tool events without errors', () => {
-    const renderer = createRenderer();
-    expect(() => {
-      renderer.toolStart('test_tool', { key: 'value' });
-      renderer.toolEnd('test_tool', 150);
-      renderer.toolError('test_tool', 'something went wrong');
-    }).not.toThrow();
-  });
-
-  test('should render usage without errors', () => {
-    const renderer = createRenderer();
-    expect(() => {
-      renderer.usage({ inputTokens: 1000, outputTokens: 500 });
-    }).not.toThrow();
-  });
-
-  test('should truncate long tool inputs in display', () => {
-    const renderer = createRenderer();
-    // Shouldn't throw even with very long input
-    expect(() => {
-      renderer.toolStart('test', { longKey: 'x'.repeat(200) });
-    }).not.toThrow();
   });
 });

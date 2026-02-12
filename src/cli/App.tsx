@@ -3,16 +3,18 @@ import { Box, Text, Static, useApp } from 'ink';
 import type { MasterMindConfig } from '../config/config.types.ts';
 import type { Agent } from '../agent/agent.ts';
 import type { Spinner as SpinnerInterface } from './spinner.ts';
+import type { Renderer } from './renderer.ts';
+import type { ChatItem } from './chatItems.ts';
 import { buildAgent, handleSlashCommand } from './cli.ts';
-import { createTuiRenderer } from './tuiRenderer.ts';
+import { createStreamParser } from './useStreamParser.ts';
+import { ChatItemView } from './ChatItemView.tsx';
 import { Spinner } from './SpinnerView.tsx';
 import { StatusBar } from './StatusBar.tsx';
 import { TextInput } from './TextInput.tsx';
-import { theme, colors } from './theme.ts';
 
-interface ChatLine {
+interface ChatEntry {
   id: number;
-  text: string;
+  item: ChatItem;
 }
 
 interface AppProps {
@@ -21,7 +23,7 @@ interface AppProps {
 
 export function App({ config }: AppProps) {
   const { exit } = useApp();
-  const [chatLog, setChatLog] = useState<ChatLine[]>([]);
+  const [chatLog, setChatLog] = useState<ChatEntry[]>([]);
   const [streamText, setStreamText] = useState('');
   const [locked, setLocked] = useState(false);
   const [spinnerActive, setSpinnerActive] = useState(false);
@@ -40,19 +42,61 @@ export function App({ config }: AppProps) {
 
   const nextIdRef = useRef(0);
   const agentRef = useRef<Agent | null>(null);
-  const rendererRef = useRef<ReturnType<typeof createTuiRenderer> | null>(null);
+  const rendererRef = useRef<Renderer | null>(null);
+  const parserRef = useRef<ReturnType<typeof createStreamParser> | null>(null);
 
-  // Initialize agent on mount
   useEffect(() => {
     let id = 0;
-    const appendLine = (text: string) => {
-      const lineId = id++;
-      setChatLog((prev) => [...prev, { id: lineId, text }]);
+
+    const appendItem = (item: ChatItem) => {
+      const entryId = id++;
+      setChatLog((prev) => [...prev, { id: entryId, item }]);
     };
-    const renderer = createTuiRenderer({ appendLine, setStreamText });
+
+    const parser = createStreamParser(appendItem);
+    parserRef.current = parser;
+
+    const renderer: Renderer = {
+      banner() { appendItem({ type: 'banner' }); },
+      help() { appendItem({ type: 'help' }); },
+      streamText(chunk: string) {
+        parser.feed(chunk);
+        setStreamText(parser.getCurrentLine());
+      },
+      endStream() {
+        setStreamText('');
+        parser.flush();
+      },
+      toolStart(name: string, input: Record<string, unknown>) {
+        const inputStr = JSON.stringify(input, null, 0);
+        const truncated = inputStr.length > 100 ? inputStr.slice(0, 97) + '...' : inputStr;
+        appendItem({ type: 'tool_start', name, input: truncated });
+      },
+      toolEnd(name: string, durationMs: number) {
+        appendItem({ type: 'tool_end', name, durationMs });
+      },
+      toolError(name: string, error: string) {
+        appendItem({ type: 'tool_error', name, error });
+      },
+      error(message: string) { appendItem({ type: 'error', message }); },
+      info(message: string) { appendItem({ type: 'info', message }); },
+      warning(message: string) { appendItem({ type: 'warning', message }); },
+      success(message: string) { appendItem({ type: 'success', message }); },
+      usage(usage) {
+        appendItem({ type: 'usage', inputTokens: usage.inputTokens, outputTokens: usage.outputTokens });
+      },
+      divider() { appendItem({ type: 'divider' }); },
+      markdown(text: string) {
+        // Feed the markdown text through the stream parser to get structured items
+        const mdParser = createStreamParser(appendItem);
+        mdParser.feed(text + '\n');
+        mdParser.flush();
+      },
+      newline() { appendItem({ type: 'newline' }); },
+    };
+
     rendererRef.current = renderer;
 
-    // Spinner adapter that sets React state
     const spinner: SpinnerInterface = {
       start(message = 'Thinking...') {
         setSpinnerActive(true);
@@ -65,7 +109,7 @@ export function App({ config }: AppProps) {
         setSpinnerActive(false);
       },
       isActive() {
-        return false; // stateless check — React state is source of truth
+        return false;
       },
     };
 
@@ -88,7 +132,6 @@ export function App({ config }: AppProps) {
     const renderer = rendererRef.current;
     if (!agent || !renderer) return;
 
-    // Check for slash commands
     if (text.startsWith('/')) {
       const command = text.split(' ')[0]!.toLowerCase();
       const result = handleSlashCommand(command, agent, renderer);
@@ -99,8 +142,7 @@ export function App({ config }: AppProps) {
       return;
     }
 
-    // User message
-    renderer.info(`${theme.prompt}❯${colors.reset} ${text}`);
+    renderer.info(`\u276f ${text}`);
     setLocked(true);
 
     await agent.handleMessage(text);
@@ -123,7 +165,11 @@ export function App({ config }: AppProps) {
   return (
     <Box flexDirection="column">
       <Static items={chatLog}>
-        {(item) => <Text key={item.id}>{item.text}</Text>}
+        {(entry) => (
+          <Box key={entry.id}>
+            <ChatItemView item={entry.item} />
+          </Box>
+        )}
       </Static>
       <Spinner active={spinnerActive} message={spinnerMessage} />
       {streamText ? <Text>{streamText}</Text> : null}
