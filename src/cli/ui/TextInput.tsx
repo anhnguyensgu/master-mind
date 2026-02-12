@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
-import { useEditor, getSubmittedText, MAX_VISIBLE_LINES } from './useEditor.ts';
-import type { EditorState } from './useEditor.ts';
+import { useEditor, getSubmittedText, MAX_VISIBLE_LINES } from '../useEditor.ts';
+import type { EditorState } from '../useEditor.ts';
 
 interface TextInputProps {
   locked: boolean;
@@ -114,9 +114,6 @@ export function TextInput({ locked, onSubmit, onQuit }: TextInputProps) {
   });
 
   // Pad remaining lines if fewer than MAX_VISIBLE_LINES
-  while (renderedLines.length < MAX_VISIBLE_LINES) {
-    renderedLines.push(<Text key={`pad-${renderedLines.length}`}>{' '}</Text>);
-  }
 
   return (
     <Box flexDirection="column">

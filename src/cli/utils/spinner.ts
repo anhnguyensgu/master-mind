@@ -1,4 +1,4 @@
-import { cursor, erase, theme, colors } from './theme';
+import { cursor, erase, theme, colors } from '../ui/theme';
 
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const INTERVAL_MS = 80;

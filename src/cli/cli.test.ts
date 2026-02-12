@@ -1,6 +1,6 @@
 import { test, expect, describe } from 'bun:test';
-import { createSpinner } from './spinner';
-import { colors, style, theme, cursor, erase } from './theme';
+import { createSpinner } from './utils/spinner';
+import { colors, style, theme, cursor, erase } from './ui/theme';
 
 describe('theme', () => {
   test('colors should be ANSI escape sequences', () => {

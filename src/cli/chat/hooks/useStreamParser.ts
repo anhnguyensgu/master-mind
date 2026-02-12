@@ -1,5 +1,6 @@
-import type { ChatItem } from './chatItems.ts';
-import { parseMarkdownTable } from './format.ts';
+import type { ChatItem } from '../types/chatItems.ts';
+import { CHAT_ITEM_TYPE } from '../types/chatItems.ts';
+import { parseMarkdownTable } from '../../utils/format.ts';
 
 const enum StreamState {
   NORMAL = 0,
@@ -15,7 +16,7 @@ export function createStreamParser(emit: (item: ChatItem) => void) {
   let tableLines: string[] = [];
 
   function flushCodeBlock() {
-    emit({ type: 'code', lines: codeBlockLines, lang: codeBlockLang });
+    emit({ type: CHAT_ITEM_TYPE.CODE, lines: codeBlockLines, lang: codeBlockLang });
     codeBlockLines = [];
     codeBlockLang = '';
   }
@@ -24,7 +25,7 @@ export function createStreamParser(emit: (item: ChatItem) => void) {
     const block = tableLines.join('\n');
     const table = parseMarkdownTable(block);
     if (table) {
-      emit({ type: 'table', headers: table.headers, rows: table.rows, colWidths: table.colWidths });
+      emit({ type: CHAT_ITEM_TYPE.TABLE, headers: table.headers, rows: table.rows, colWidths: table.colWidths });
     } else {
       for (const tl of tableLines) {
         emitNormalLine(tl);
@@ -36,30 +37,30 @@ export function createStreamParser(emit: (item: ChatItem) => void) {
   function emitNormalLine(line: string) {
     // Headings
     const h1 = line.match(/^# (.+)$/);
-    if (h1) { emit({ type: 'heading', level: 1, text: h1[1]! }); return; }
+    if (h1) { emit({ type: CHAT_ITEM_TYPE.HEADING, level: 1, text: h1[1]! }); return; }
 
     const h2 = line.match(/^## (.+)$/);
-    if (h2) { emit({ type: 'heading', level: 2, text: h2[1]! }); return; }
+    if (h2) { emit({ type: CHAT_ITEM_TYPE.HEADING, level: 2, text: h2[1]! }); return; }
 
     const h3 = line.match(/^### (.+)$/);
-    if (h3) { emit({ type: 'heading', level: 3, text: h3[1]! }); return; }
+    if (h3) { emit({ type: CHAT_ITEM_TYPE.HEADING, level: 3, text: h3[1]! }); return; }
 
     // Horizontal rules
-    if (/^---+$/.test(line)) { emit({ type: 'divider' }); return; }
+    if (/^---+$/.test(line)) { emit({ type: CHAT_ITEM_TYPE.DIVIDER }); return; }
 
     // Unordered list
     const ul = line.match(/^(\s*)- (.+)$/);
-    if (ul) { emit({ type: 'list_item', text: ul[2]!, ordered: false }); return; }
+    if (ul) { emit({ type: CHAT_ITEM_TYPE.LIST_ITEM, text: ul[2]!, ordered: false }); return; }
 
     // Ordered list
     const ol = line.match(/^(\s*)(\d+)\. (.+)$/);
-    if (ol) { emit({ type: 'list_item', text: ol[3]!, ordered: true, index: parseInt(ol[2]!, 10) }); return; }
+    if (ol) { emit({ type: CHAT_ITEM_TYPE.LIST_ITEM, text: ol[3]!, ordered: true, index: parseInt(ol[2]!, 10) }); return; }
 
     // Empty line
-    if (line === '') { emit({ type: 'newline' }); return; }
+    if (line === '') { emit({ type: CHAT_ITEM_TYPE.NEWLINE }); return; }
 
     // Plain text (with possible inline formatting)
-    emit({ type: 'text', text: line });
+    emit({ type: CHAT_ITEM_TYPE.TEXT, text: line });
   }
 
   function processCompletedLine(line: string) {

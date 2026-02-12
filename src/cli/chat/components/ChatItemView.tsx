@@ -1,20 +1,22 @@
 import { Box, Text } from 'ink';
-import type { ChatItem } from './chatItems.ts';
-import { InlineText } from './InlineText.tsx';
+import type { ChatItem } from '../types/chatItems.ts';
+import { CHAT_ITEM_TYPE } from '../types/chatItems.ts';
+import { COMMANDS } from '../commands.ts';
+import { InlineText } from '../../ui/InlineText.tsx';
 
 export function ChatItemView({ item }: { item: ChatItem }) {
   switch (item.type) {
-    case 'text':
+    case CHAT_ITEM_TYPE.TEXT:
       return <InlineText text={item.text} />;
 
-    case 'heading':
+    case CHAT_ITEM_TYPE.HEADING:
       if (item.level === 1)
         return <Text bold underline color="cyan">{'\n'}{item.text}</Text>;
       if (item.level === 2)
         return <Text bold color="cyan">{'\n'}  {item.text}</Text>;
       return <Text bold color="magenta">   {item.text}</Text>;
 
-    case 'code': {
+    case CHAT_ITEM_TYPE.CODE: {
       const width = 60;
       const langLabel = item.lang ? ` ${item.lang} ` : '';
       const topRule = `\u250c${langLabel}${'\u2500'.repeat(Math.max(0, width - langLabel.length - 2))}\u2510`;
@@ -30,7 +32,7 @@ export function ChatItemView({ item }: { item: ChatItem }) {
       );
     }
 
-    case 'table': {
+    case CHAT_ITEM_TYPE.TABLE: {
       const { headers, rows, colWidths } = item;
       const pad = (text: string, w: number) => text + ' '.repeat(Math.max(0, w - text.length));
       const top = `\u250c${colWidths.map(w => '\u2500'.repeat(w + 2)).join('\u252c')}\u2510`;
@@ -60,40 +62,40 @@ export function ChatItemView({ item }: { item: ChatItem }) {
       );
     }
 
-    case 'list_item':
+    case CHAT_ITEM_TYPE.LIST_ITEM:
       if (item.ordered) {
         return <Text>  <Text dimColor>{item.index ?? 1}.</Text> <InlineText text={item.text} /></Text>;
       }
       return <Text>  <Text dimColor>{'\u2022'}</Text> <InlineText text={item.text} /></Text>;
 
-    case 'divider':
+    case CHAT_ITEM_TYPE.DIVIDER:
       return <Text dimColor>{'\u2500'.repeat(60)}</Text>;
 
-    case 'newline':
+    case CHAT_ITEM_TYPE.NEWLINE:
       return <Text>{' '}</Text>;
 
-    case 'tool_start':
+    case CHAT_ITEM_TYPE.TOOL_START:
       return <Text>  <Text color="yellow">{'\u26a1'} {item.name}</Text> <Text dimColor>{item.input}</Text></Text>;
 
-    case 'tool_end':
+    case CHAT_ITEM_TYPE.TOOL_END:
       return <Text>  <Text color="green">{'\u2713'} {item.name}</Text> <Text dimColor>({item.durationMs}ms)</Text></Text>;
 
-    case 'tool_error':
+    case CHAT_ITEM_TYPE.TOOL_ERROR:
       return <Text>  <Text color="red">{'\u2717'} {item.name}</Text>: {item.error}</Text>;
 
-    case 'error':
+    case CHAT_ITEM_TYPE.ERROR:
       return <Text color="red">Error: {item.message}</Text>;
 
-    case 'info':
+    case CHAT_ITEM_TYPE.INFO:
       return <Text color="blue">{item.message}</Text>;
 
-    case 'warning':
+    case CHAT_ITEM_TYPE.WARNING:
       return <Text color="yellow">{item.message}</Text>;
 
-    case 'success':
+    case CHAT_ITEM_TYPE.SUCCESS:
       return <Text color="green">{item.message}</Text>;
 
-    case 'usage':
+    case CHAT_ITEM_TYPE.USAGE:
       return (
         <Box flexDirection="column">
           <Text>{' '}</Text>
@@ -105,7 +107,7 @@ export function ChatItemView({ item }: { item: ChatItem }) {
         </Box>
       );
 
-    case 'banner':
+    case CHAT_ITEM_TYPE.BANNER:
       return (
         <Box flexDirection="column">
           <Text>{' '}</Text>
@@ -120,17 +122,14 @@ export function ChatItemView({ item }: { item: ChatItem }) {
         </Box>
       );
 
-    case 'help':
+    case CHAT_ITEM_TYPE.HELP:
       return (
         <Box flexDirection="column">
           <Text>{' '}</Text>
           <Text bold color="cyan">Commands:</Text>
-          <Text>  <Text color="cyan">/help</Text>     Show this help</Text>
-          <Text>  <Text color="cyan">/quit</Text>     Exit the agent</Text>
-          <Text>  <Text color="cyan">/clear</Text>    Clear conversation history</Text>
-          <Text>  <Text color="cyan">/history</Text>  Show conversation history</Text>
-          <Text>  <Text color="cyan">/cost</Text>     Show token usage &amp; estimated cost</Text>
-          <Text>  <Text color="cyan">/model</Text>    Show current model info</Text>
+          {Object.values(COMMANDS).map((cmd) => (
+            <Text key={cmd.primary}>  <Text color="cyan">{cmd.primary}</Text>     {cmd.description}</Text>
+          ))}
           <Text>{' '}</Text>
           <Text bold color="cyan">Tips:</Text>
           <Text dimColor>  End a line with \ for multiline input</Text>

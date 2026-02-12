@@ -1,4 +1,4 @@
-import type { TokenUsage } from '../agent/agent.types';
+import type { TokenUsage } from '../../agent/agent.types';
 
 export interface Renderer {
   banner(): void;
