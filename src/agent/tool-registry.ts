@@ -1,5 +1,6 @@
 import type { AgentTool, ToolExecutionResult } from './agent.types';
 import type { LLMToolDef } from './llm/llm.types';
+import type { HookManager } from './plugins/hook-manager';
 
 export interface ToolRegistry {
   register(tool: AgentTool): void;
@@ -9,7 +10,7 @@ export interface ToolRegistry {
   list(): string[];
 }
 
-export function createToolRegistry(): ToolRegistry {
+export function createToolRegistry(hookManager?: HookManager): ToolRegistry {
   const tools = new Map<string, AgentTool>();
 
   return {
@@ -26,13 +27,31 @@ export function createToolRegistry(): ToolRegistry {
     },
 
     async execute(name: string, input: Record<string, unknown>): Promise<ToolExecutionResult> {
-      const tool = tools.get(name);
+      let resolvedName = name;
+      let resolvedInput = input;
+
+      if (hookManager) {
+        const hookResult = await hookManager.runBeforeToolExecute(name, input);
+        if (hookResult === null) {
+          return { content: `Tool execution blocked by plugin for tool: ${name}`, isError: true };
+        }
+        resolvedName = hookResult.name;
+        resolvedInput = hookResult.input;
+      }
+
+      const tool = tools.get(resolvedName);
       if (!tool) {
-        return { content: `Unknown tool: ${name}`, isError: true };
+        return { content: `Unknown tool: ${resolvedName}`, isError: true };
       }
 
       try {
-        return await tool.execute(input);
+        let result = await tool.execute(resolvedInput);
+
+        if (hookManager) {
+          result = await hookManager.runAfterToolExecute(resolvedName, resolvedInput, result);
+        }
+
+        return result;
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         return { content: `Tool execution error: ${message}`, isError: true };

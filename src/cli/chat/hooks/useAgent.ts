@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useApp } from 'ink';
 import type { MasterMindConfig } from '../../../config/config.types.ts';
 import type { Agent } from '../../../agent/agent.ts';
+import type { HookManager } from '../../../agent/plugins/hook-manager.ts';
 import type { Spinner as SpinnerInterface } from '../../utils/spinner.ts';
 import type { Renderer } from '../../utils/renderer.ts';
 import type { ChatItem } from '../types/chatItems.ts';
@@ -38,11 +39,13 @@ export function useAgent(config: MasterMindConfig) {
 
     const nextIdRef = useRef(0);
     const agentRef = useRef<Agent | null>(null);
+    const hookManagerRef = useRef<HookManager | null>(null);
     const rendererRef = useRef<Renderer | null>(null);
     const parserRef = useRef<ReturnType<typeof createStreamParser> | null>(null);
 
     useEffect(() => {
         let id = 0;
+        let cancelled = false;
 
         const appendItem = (item: ChatItem) => {
             const entryId = id++;
@@ -83,7 +86,6 @@ export function useAgent(config: MasterMindConfig) {
             },
             divider() { appendItem({ type: CHAT_ITEM_TYPE.DIVIDER }); },
             markdown(text: string) {
-                // Feed the markdown text through the stream parser to get structured items
                 const mdParser = createStreamParser(appendItem);
                 mdParser.feed(text + '\n');
                 mdParser.flush();
@@ -109,18 +111,31 @@ export function useAgent(config: MasterMindConfig) {
             },
         };
 
-        try {
-            const agent = buildAgent(config, renderer, spinner);
-            agentRef.current = agent;
-            nextIdRef.current = id;
+        async function init() {
+            try {
+                const { agent, hookManager } = await buildAgent(config, renderer, spinner);
+                if (cancelled) return;
 
-            renderer.banner();
-            renderer.info(`  Provider: ${config.llm.provider} | Model: ${config.llm.model}`);
-            renderer.newline();
-        } catch (error) {
-            const message = error instanceof Error ? error.message : String(error);
-            renderer.error(`Failed to initialize agent: ${message}`);
+                agentRef.current = agent;
+                hookManagerRef.current = hookManager;
+                nextIdRef.current = id;
+
+                renderer.banner();
+                renderer.info(`  Provider: ${config.llm.provider} | Model: ${config.llm.model}`);
+                renderer.newline();
+            } catch (error) {
+                if (cancelled) return;
+                const message = error instanceof Error ? error.message : String(error);
+                renderer.error(`Failed to initialize agent: ${message}`);
+            }
         }
+
+        init();
+
+        return () => {
+            cancelled = true;
+            hookManagerRef.current?.runOnShutdown().catch(() => {});
+        };
     }, [config]);
 
     const submit = useCallback(async (text: string) => {
@@ -154,7 +169,8 @@ export function useAgent(config: MasterMindConfig) {
         setLocked(false);
     }, [exit]);
 
-    const quit = useCallback(() => {
+    const quit = useCallback(async () => {
+        await hookManagerRef.current?.runOnShutdown();
         exit();
     }, [exit]);
 

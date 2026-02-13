@@ -5,37 +5,29 @@ import { createLLMProvider } from '../../agent/llm/llm-factory';
 import { createConversationManager } from '../../agent/conversation';
 import { createToolRegistry } from '../../agent/tool-registry';
 import { buildSystemPrompt } from '../../agent/system-prompt';
-import { createCostSummaryTool } from '../../agent/tools/cost-summary';
-import { createCostByServiceTool } from '../../agent/tools/cost-by-service';
-import { createCostQueryTool } from '../../agent/tools/cost-query';
-import { createBashTool } from '../../agent/tools/bash';
-import { createCloudCliTool } from '../../agent/tools/cloud-cli';
-import { createResourceListTool } from '../../agent/tools/resource-list';
-import { createResourceMetricsTool } from '../../agent/tools/resource-metrics';
-import { createOptimizationTool } from '../../agent/tools/optimization';
+import { createBuiltInTools } from '../../agent/tools/built-in-tools';
+import { createHookManager, type HookManager } from '../../agent/plugins/hook-manager';
+import { loadPlugins } from '../../agent/plugins/plugin-loader';
 import type { Renderer } from '../utils/renderer';
 import type { Spinner } from '../utils/spinner';
 
-export function buildAgent(config: MasterMindConfig, renderer: Renderer, spinner: Spinner): Agent {
+export async function buildAgent(
+    config: MasterMindConfig,
+    renderer: Renderer,
+    spinner: Spinner,
+): Promise<{ agent: Agent; hookManager: HookManager }> {
     const provider = createLLMProvider(config.llm);
     const conversation = createConversationManager();
-    const toolRegistry = createToolRegistry();
+    const hookManager = createHookManager();
+    const toolRegistry = createToolRegistry(hookManager);
 
-    const tools = [
-        createCostSummaryTool(config.costApi),
-        createCostByServiceTool(config.costApi),
-        createCostQueryTool(config.costApi),
-        createBashTool(),
-        createCloudCliTool(),
-        createResourceListTool(),
-        createResourceMetricsTool(),
-        createOptimizationTool(config.costApi),
-    ];
-    for (const tool of tools) {
+    for (const tool of createBuiltInTools(config)) {
         toolRegistry.register(tool);
     }
 
-    return createAgent({
+    await loadPlugins(config, toolRegistry, hookManager);
+
+    const agent = createAgent({
         provider,
         conversation,
         toolRegistry,
@@ -43,6 +35,7 @@ export function buildAgent(config: MasterMindConfig, renderer: Renderer, spinner
         spinner,
         systemPrompt: buildSystemPrompt(config, toolRegistry.list()),
         maxIterations: config.agent.maxIterations,
+        hookManager,
         streamHandler: {
             onText(chunk: string) {
                 spinner.stop();
@@ -60,6 +53,6 @@ export function buildAgent(config: MasterMindConfig, renderer: Renderer, spinner
             },
         },
     });
+
+    return { agent, hookManager };
 }
-
-

@@ -22,4 +22,5 @@ export interface MasterMindConfig {
   llm: LLMConfig;
   costApi: CostApiConfig;
   agent: AgentBehaviorConfig;
+  pluginConfigPath?: string;
 }

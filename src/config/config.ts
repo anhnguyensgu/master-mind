@@ -33,5 +33,6 @@ export function loadConfig(): MasterMindConfig {
     agent: {
       maxIterations: Number(Bun.env.MASTER_MIND_MAX_ITERATIONS) || 10,
     },
+    pluginConfigPath: Bun.env.MASTER_MIND_PLUGIN_CONFIG || undefined,
   };
 }

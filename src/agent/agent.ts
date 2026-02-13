@@ -1,7 +1,8 @@
 import type { TokenUsage } from './agent.types';
-import type { LLMContentBlock, LLMToolUseBlock, LLMProvider, StreamCallbacks } from './llm/llm.types';
-import type { Renderer } from '../cli/renderer';
-import type { Spinner } from '../cli/spinner';
+import type { LLMContentBlock, LLMTextBlock, LLMToolUseBlock, LLMProvider, StreamCallbacks } from './llm/llm.types';
+import type { HookManager } from './plugins/hook-manager';
+import type { Renderer } from '../cli/utils/renderer';
+import type { Spinner } from '../cli/utils/spinner';
 import type { ConversationManager } from './conversation';
 import type { ToolRegistry } from './tool-registry';
 
@@ -60,14 +61,19 @@ export interface AgentDeps {
   streamHandler: StreamCallbacks;
   systemPrompt: string;
   maxIterations: number;
+  hookManager?: HookManager;
 }
 
 export function createAgent(deps: AgentDeps): Agent {
-  const { provider, conversation, toolRegistry, renderer, spinner, streamHandler, systemPrompt, maxIterations } = deps;
+  const { provider, conversation, toolRegistry, renderer, spinner, streamHandler, systemPrompt, maxIterations, hookManager } = deps;
 
   return {
     async handleMessage(input: string) {
-      conversation.addUserMessage(input);
+      const processedInput = hookManager
+        ? await hookManager.runBeforeMessage(input)
+        : input;
+
+      conversation.addUserMessage(processedInput);
       spinner.start('Thinking...');
 
       let iterations = 0;
@@ -88,6 +94,13 @@ export function createAgent(deps: AgentDeps): Agent {
 
           // If the model didn't request tool use, we're done
           if (response.stopReason !== 'tool_use') {
+            if (hookManager) {
+              const textContent = response.content
+                .filter((b): b is LLMTextBlock => b.type === 'text')
+                .map((b) => b.text)
+                .join('');
+              await hookManager.runAfterResponse({ content: textContent, stopReason: response.stopReason });
+            }
             break;
           }
 

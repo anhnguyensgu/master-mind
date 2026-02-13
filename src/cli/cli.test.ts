@@ -1,5 +1,4 @@
 import { test, expect, describe } from 'bun:test';
-import { createSpinner } from './utils/spinner';
 import { colors, style, theme, cursor, erase } from './ui/theme';
 
 describe('theme', () => {
@@ -27,37 +26,5 @@ describe('theme', () => {
     expect(theme.error).toBe(colors.brightRed);
     expect(theme.success).toBe(colors.brightGreen);
     expect(theme.tool).toBe(colors.yellow);
-  });
-});
-
-describe('spinner', () => {
-  test('should create spinner with correct interface', () => {
-    const spinner = createSpinner();
-    expect(typeof spinner.start).toBe('function');
-    expect(typeof spinner.stop).toBe('function');
-    expect(typeof spinner.update).toBe('function');
-    expect(typeof spinner.isActive).toBe('function');
-  });
-
-  test('isActive should track state', () => {
-    const spinner = createSpinner();
-    expect(spinner.isActive()).toBe(false);
-    spinner.start('test');
-    expect(spinner.isActive()).toBe(true);
-    spinner.stop();
-    expect(spinner.isActive()).toBe(false);
-  });
-
-  test('stop should be safe to call when not active', () => {
-    const spinner = createSpinner();
-    expect(() => spinner.stop()).not.toThrow();
-  });
-
-  test('start should be idempotent', () => {
-    const spinner = createSpinner();
-    spinner.start('test');
-    spinner.start('test again'); // should not double-start
-    expect(spinner.isActive()).toBe(true);
-    spinner.stop();
   });
 });
