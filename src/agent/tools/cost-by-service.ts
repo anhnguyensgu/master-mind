@@ -1,41 +1,28 @@
-import type { AgentTool } from '../agent.types';
+import { createTool } from '@mastra/core/tools';
+import { z } from 'zod';
 import type { CostApiConfig } from '../../config/config.types';
 import { costApiOptionsFromConfig, costApiFetch } from './tool.types';
 
-export function createCostByServiceTool(config: CostApiConfig): AgentTool {
+export function createCostByServiceTool(config: CostApiConfig) {
   const options = costApiOptionsFromConfig(config);
 
-  return {
-    name: 'cost_by_service',
+  return createTool({
+    id: 'cost_by_service',
     description:
       'Get cloud costs broken down by service (e.g., EC2, S3, RDS, Lambda). Useful for identifying which services are driving costs.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        start: {
-          type: 'string',
-          description: 'Start date in YYYY-MM-DD format (inclusive)',
-        },
-        end: {
-          type: 'string',
-          description: 'End date in YYYY-MM-DD format (exclusive)',
-        },
-        provider: {
-          type: 'string',
-          enum: ['aws', 'gcp', 'azure'],
-          description: 'Cloud provider (defaults to configured default)',
-        },
-      },
-      required: ['start', 'end'],
-    },
+    inputSchema: z.object({
+      start: z.string().describe('Start date in YYYY-MM-DD format (inclusive)'),
+      end: z.string().describe('End date in YYYY-MM-DD format (exclusive)'),
+      provider: z.enum(['aws', 'gcp', 'azure']).optional().describe('Cloud provider (defaults to configured default)'),
+    }),
 
-    async execute(input) {
+    execute: async ({ context: { start, end, provider } }) => {
       try {
         const params = new URLSearchParams();
-        params.set('start', input.start as string);
-        params.set('end', input.end as string);
-        if (input.provider) {
-          params.set('provider', input.provider as string);
+        params.set('start', start);
+        params.set('end', end);
+        if (provider) {
+          params.set('provider', provider);
         }
 
         const data = await costApiFetch(options, `/api/costs/by-service?${params}`);
@@ -45,5 +32,5 @@ export function createCostByServiceTool(config: CostApiConfig): AgentTool {
         return { content: `Failed to fetch cost by service: ${message}`, isError: true };
       }
     },
-  };
+  });
 }

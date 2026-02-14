@@ -1,5 +1,3 @@
-import type { AgentTool, ToolExecutionResult } from '../agent.types';
-import type { ToolRegistry } from '../tool-registry';
 import type { MasterMindConfig } from '../../config/config.types';
 
 export interface PluginSpec {
@@ -13,7 +11,6 @@ export interface Plugin {
   name: string;
   version?: string;
   description?: string;
-  tools?: AgentTool[];
   hooks?: PluginHooks;
 }
 
@@ -24,18 +21,8 @@ export interface PluginHooks {
   onShutdown?(): void | Promise<void>;
   beforeMessage?(message: string): string | Promise<string>;
   afterResponse?(response: { content: string; stopReason: string }): void | Promise<void>;
-  beforeToolExecute?(
-    name: string,
-    input: Record<string, unknown>,
-  ): { name: string; input: Record<string, unknown> } | null | Promise<{ name: string; input: Record<string, unknown> } | null>;
-  afterToolExecute?(
-    name: string,
-    input: Record<string, unknown>,
-    result: ToolExecutionResult,
-  ): ToolExecutionResult | Promise<ToolExecutionResult>;
 }
 
 export interface PluginContext {
   config: MasterMindConfig;
-  toolRegistry: ToolRegistry;
 }

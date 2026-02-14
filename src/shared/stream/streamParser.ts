@@ -1,6 +1,6 @@
-import type { ChatItem } from '../types/chatItems.ts';
-import { CHAT_ITEM_TYPE } from '../types/chatItems.ts';
-import { parseMarkdownTable } from '../../utils/format.ts';
+import type { ChatItem } from './chatItems';
+import { CHAT_ITEM_TYPE } from './chatItems';
+import { parseMarkdownTable } from '../../cli/utils/format';
 
 const enum StreamState {
   NORMAL = 0,

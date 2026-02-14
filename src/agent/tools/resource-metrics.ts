@@ -1,4 +1,5 @@
-import type { AgentTool } from '../agent.types';
+import { createTool } from '@mastra/core/tools';
+import { z } from 'zod';
 
 type CloudProvider = 'aws' | 'gcp' | 'azure';
 
@@ -111,95 +112,71 @@ function inferAwsNamespace(metric: string): string {
 
 const MAX_OUTPUT_LENGTH = 10_000;
 
-export function createResourceMetricsTool(): AgentTool {
-  return {
-    name: 'resource_metrics',
-    description:
-      'Fetch utilization metrics for a cloud resource (CPU, memory, network, disk). Useful for identifying underutilized or over-provisioned resources. Supports AWS CloudWatch, GCP Monitoring, and Azure Monitor.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        provider: {
-          type: 'string',
-          enum: ['aws', 'gcp', 'azure'],
-          description: 'Cloud provider',
-        },
-        resourceId: {
-          type: 'string',
-          description: 'Resource identifier (e.g., EC2 instance ID, GCE instance name)',
-        },
-        metric: {
-          type: 'string',
-          description:
-            'Metric name. Use common names (cpu, memory, network_in, network_out, disk_read, disk_write) or provider-specific metric names.',
-        },
-        period: {
-          type: 'string',
-          description: 'Time period to query. Format: <number><unit> where unit is h (hours), d (days), w (weeks). Default: 24h',
-        },
-        region: {
-          type: 'string',
-          description: 'Region (optional, for AWS)',
-        },
-      },
-      required: ['provider', 'resourceId', 'metric'],
-    },
+export const resourceMetricsTool = createTool({
+  id: 'resource_metrics',
+  description:
+    'Fetch utilization metrics for a cloud resource (CPU, memory, network, disk). Useful for identifying underutilized or over-provisioned resources. Supports AWS CloudWatch, GCP Monitoring, and Azure Monitor.',
+  inputSchema: z.object({
+    provider: z.enum(['aws', 'gcp', 'azure']).describe('Cloud provider'),
+    resourceId: z.string().describe('Resource identifier (e.g., EC2 instance ID, GCE instance name)'),
+    metric: z.string().describe(
+      'Metric name. Use common names (cpu, memory, network_in, network_out, disk_read, disk_write) or provider-specific metric names.',
+    ),
+    period: z.string().optional().describe('Time period to query. Format: <number><unit> where unit is h (hours), d (days), w (weeks). Default: 24h'),
+    region: z.string().optional().describe('Region (optional, for AWS)'),
+  }),
 
-    async execute(input) {
-      const provider = input.provider as CloudProvider;
-      const resourceId = input.resourceId as string;
-      let metric = input.metric as string;
-      const period = (input.period as string) || '24h';
-      const region = input.region as string | undefined;
+  execute: async ({ context: { provider, resourceId, metric: rawMetric, period: rawPeriod, region } }) => {
+    let metric = rawMetric;
+    const period = rawPeriod || '24h';
 
-      const command = METRIC_COMMANDS[provider];
-      if (!command) {
-        return { content: `Unknown provider: ${provider}`, isError: true };
+    const command = METRIC_COMMANDS[provider];
+    if (!command) {
+      return { content: `Unknown provider: ${provider}`, isError: true };
+    }
+
+    // Resolve common metric names
+    const commonMetrics = COMMON_METRICS[provider];
+    if (commonMetrics && commonMetrics[metric.toLowerCase()]) {
+      metric = commonMetrics[metric.toLowerCase()]!;
+    }
+
+    const args = command.buildArgs(resourceId, metric, period, region);
+
+    try {
+      const proc = Bun.spawn([command.cli, ...args], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: process.env,
+      });
+
+      const timeoutId = setTimeout(() => proc.kill(), 60_000);
+
+      const [stdout, stderr] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+      ]);
+
+      clearTimeout(timeoutId);
+      const exitCode = await proc.exited;
+
+      let output = stdout || '';
+      if (exitCode !== 0 && stderr) {
+        output = stderr;
       }
 
-      // Resolve common metric names
-      const commonMetrics = COMMON_METRICS[provider];
-      if (commonMetrics && commonMetrics[metric.toLowerCase()]) {
-        metric = commonMetrics[metric.toLowerCase()]!;
+      if (!output) {
+        output = `No metrics data returned for ${metric} on ${resourceId}`;
       }
 
-      const args = command.buildArgs(resourceId, metric, period, region);
-
-      try {
-        const proc = Bun.spawn([command.cli, ...args], {
-          stdout: 'pipe',
-          stderr: 'pipe',
-          env: process.env,
-        });
-
-        const timeoutId = setTimeout(() => proc.kill(), 60_000);
-
-        const [stdout, stderr] = await Promise.all([
-          new Response(proc.stdout).text(),
-          new Response(proc.stderr).text(),
-        ]);
-
-        clearTimeout(timeoutId);
-        const exitCode = await proc.exited;
-
-        let output = stdout || '';
-        if (exitCode !== 0 && stderr) {
-          output = stderr;
-        }
-
-        if (!output) {
-          output = `No metrics data returned for ${metric} on ${resourceId}`;
-        }
-
-        if (output.length > MAX_OUTPUT_LENGTH) {
-          output = output.slice(0, MAX_OUTPUT_LENGTH) + '\n...(truncated)';
-        }
-
-        return { content: output, isError: exitCode !== 0 };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { content: `Failed to fetch metrics: ${message}`, isError: true };
+      if (output.length > MAX_OUTPUT_LENGTH) {
+        output = output.slice(0, MAX_OUTPUT_LENGTH) + '\n...(truncated)';
       }
-    },
-  };
-}
+
+      return { content: output, isError: exitCode !== 0 };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { content: `Failed to fetch metrics: ${message}`, isError: true };
+    }
+  },
+});

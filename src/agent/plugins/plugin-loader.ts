@@ -1,7 +1,6 @@
 import { resolve, dirname } from 'node:path';
 import type { PluginSpec, Plugin, PluginFactory, PluginContext } from './plugin.types';
 import type { MasterMindConfig } from '../../config/config.types';
-import type { ToolRegistry } from '../tool-registry';
 import type { HookManager } from './hook-manager';
 
 export async function loadPluginConfig(
@@ -46,7 +45,6 @@ async function resolvePlugin(
 
 export async function loadPlugins(
   config: MasterMindConfig,
-  toolRegistry: ToolRegistry,
   hookManager: HookManager,
 ): Promise<void> {
   if (!config.pluginConfigPath) return;
@@ -68,22 +66,11 @@ export async function loadPlugins(
     }
     seenNames.add(plugin.name);
 
-    if (plugin.tools) {
-      for (const tool of plugin.tools) {
-        if (toolRegistry.has(tool.name) && !spec.replace) {
-          throw new Error(
-            `Plugin '${plugin.name}' registers tool '${tool.name}' which already exists. Set replace: true in the plugin spec to override.`,
-          );
-        }
-        toolRegistry.register(tool);
-      }
-    }
-
     if (plugin.hooks) {
       hookManager.register(plugin.name, plugin.hooks);
     }
   }
 
-  const context: PluginContext = { config, toolRegistry };
+  const context: PluginContext = { config };
   await hookManager.runOnInit(context);
 }

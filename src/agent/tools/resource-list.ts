@@ -1,4 +1,5 @@
-import type { AgentTool } from '../agent.types';
+import { createTool } from '@mastra/core/tools';
+import { z } from 'zod';
 
 type CloudProvider = 'aws' | 'gcp' | 'azure';
 
@@ -45,99 +46,82 @@ const RESOURCE_COMMANDS: Record<CloudProvider, Record<string, ResourceCommand>> 
 
 const MAX_OUTPUT_LENGTH = 10_000;
 
-export function createResourceListTool(): AgentTool {
-  return {
-    name: 'resource_list',
-    description:
-      'List cloud resources by type and provider. Supports EC2, S3, RDS, Lambda (AWS), Compute, Storage, SQL (GCP), VMs, Storage (Azure), and more. Returns resource details in JSON format.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        provider: {
-          type: 'string',
-          enum: ['aws', 'gcp', 'azure'],
-          description: 'Cloud provider',
-        },
-        resourceType: {
-          type: 'string',
-          description:
-            'Resource type to list. AWS: ec2, s3, rds, lambda, ebs, elb, ecs, eks, dynamodb, elasticache, cloudfront, sqs, sns. GCP: compute, storage, sql, functions, gke, pubsub, run. Azure: vm, storage, sql, functions, aks, webapp, cosmosdb.',
-        },
-        region: {
-          type: 'string',
-          description: 'Region to query (optional, uses CLI default if not specified)',
-        },
-      },
-      required: ['provider', 'resourceType'],
-    },
+export const resourceListTool = createTool({
+  id: 'resource_list',
+  description:
+    'List cloud resources by type and provider. Supports EC2, S3, RDS, Lambda (AWS), Compute, Storage, SQL (GCP), VMs, Storage (Azure), and more. Returns resource details in JSON format.',
+  inputSchema: z.object({
+    provider: z.enum(['aws', 'gcp', 'azure']).describe('Cloud provider'),
+    resourceType: z.string().describe(
+      'Resource type to list. AWS: ec2, s3, rds, lambda, ebs, elb, ecs, eks, dynamodb, elasticache, cloudfront, sqs, sns. GCP: compute, storage, sql, functions, gke, pubsub, run. Azure: vm, storage, sql, functions, aks, webapp, cosmosdb.',
+    ),
+    region: z.string().optional().describe('Region to query (optional, uses CLI default if not specified)'),
+  }),
 
-    async execute(input) {
-      const provider = input.provider as CloudProvider;
-      const resourceType = (input.resourceType as string).toLowerCase();
-      const region = input.region as string | undefined;
+  execute: async ({ context: { provider, resourceType: rawType, region } }) => {
+    const resourceType = rawType.toLowerCase();
 
-      const providerCommands = RESOURCE_COMMANDS[provider];
-      if (!providerCommands) {
-        return { content: `Unknown provider: ${provider}`, isError: true };
+    const providerCommands = RESOURCE_COMMANDS[provider];
+    if (!providerCommands) {
+      return { content: `Unknown provider: ${provider}`, isError: true };
+    }
+
+    const command = providerCommands[resourceType];
+    if (!command) {
+      const available = Object.keys(providerCommands).join(', ');
+      return {
+        content: `Unknown resource type "${resourceType}" for ${provider}. Available: ${available}`,
+        isError: true,
+      };
+    }
+
+    const args = [...command.args];
+
+    // Add output format
+    if (provider === 'aws') {
+      args.push('--output', 'json');
+      if (region) args.push('--region', region);
+    } else if (provider === 'gcp') {
+      args.push('--format=json');
+      if (region) args.push(`--region=${region}`);
+    } else if (provider === 'azure') {
+      args.push('--output', 'json');
+    }
+
+    try {
+      const proc = Bun.spawn([command.cli, ...args], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: process.env,
+      });
+
+      const timeoutId = setTimeout(() => proc.kill(), 60_000);
+
+      const [stdout, stderr] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+      ]);
+
+      clearTimeout(timeoutId);
+      const exitCode = await proc.exited;
+
+      let output = stdout || '';
+      if (exitCode !== 0 && stderr) {
+        output = stderr;
       }
 
-      const command = providerCommands[resourceType];
-      if (!command) {
-        const available = Object.keys(providerCommands).join(', ');
-        return {
-          content: `Unknown resource type "${resourceType}" for ${provider}. Available: ${available}`,
-          isError: true,
-        };
+      if (!output) {
+        output = `No ${resourceType} resources found (exit code: ${exitCode})`;
       }
 
-      const args = [...command.args];
-
-      // Add output format
-      if (provider === 'aws') {
-        args.push('--output', 'json');
-        if (region) args.push('--region', region);
-      } else if (provider === 'gcp') {
-        args.push('--format=json');
-        if (region) args.push(`--region=${region}`);
-      } else if (provider === 'azure') {
-        args.push('--output', 'json');
+      if (output.length > MAX_OUTPUT_LENGTH) {
+        output = output.slice(0, MAX_OUTPUT_LENGTH) + '\n...(truncated)';
       }
 
-      try {
-        const proc = Bun.spawn([command.cli, ...args], {
-          stdout: 'pipe',
-          stderr: 'pipe',
-          env: process.env,
-        });
-
-        const timeoutId = setTimeout(() => proc.kill(), 60_000);
-
-        const [stdout, stderr] = await Promise.all([
-          new Response(proc.stdout).text(),
-          new Response(proc.stderr).text(),
-        ]);
-
-        clearTimeout(timeoutId);
-        const exitCode = await proc.exited;
-
-        let output = stdout || '';
-        if (exitCode !== 0 && stderr) {
-          output = stderr;
-        }
-
-        if (!output) {
-          output = `No ${resourceType} resources found (exit code: ${exitCode})`;
-        }
-
-        if (output.length > MAX_OUTPUT_LENGTH) {
-          output = output.slice(0, MAX_OUTPUT_LENGTH) + '\n...(truncated)';
-        }
-
-        return { content: output, isError: exitCode !== 0 };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { content: `Failed to list resources: ${message}`, isError: true };
-      }
-    },
-  };
-}
+      return { content: output, isError: exitCode !== 0 };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { content: `Failed to list resources: ${message}`, isError: true };
+    }
+  },
+});

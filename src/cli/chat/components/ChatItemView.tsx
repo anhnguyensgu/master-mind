@@ -1,6 +1,6 @@
 import { Box, Text } from 'ink';
-import type { ChatItem } from '../types/chatItems.ts';
-import { CHAT_ITEM_TYPE } from '../types/chatItems.ts';
+import type { ChatItem } from '../../../shared/stream/chatItems';
+import { CHAT_ITEM_TYPE } from '../../../shared/stream/chatItems';
 import { COMMANDS } from '../commands.ts';
 import { InlineText } from '../../ui/InlineText.tsx';
 

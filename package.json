@@ -20,6 +20,7 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@mastra/core": "^1.4.0",
     "ink": "^6.7.0",
     "react": "^19.2.4"
   }

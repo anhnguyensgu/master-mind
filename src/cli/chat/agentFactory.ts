@@ -1,58 +1,53 @@
-import type { MasterMindConfig } from '../../config/config.types';
+import { Agent as MastraAgent } from '@mastra/core/agent';
+import type { MasterMindConfig, LLMConfig } from '../../config/config.types';
+import type { MastraModelConfig } from '@mastra/core/agent';
 
-import { createAgent, type Agent } from '../../agent/agent';
-import { createLLMProvider } from '../../agent/llm/llm-factory';
+import { Agent, type AgentEventHandler } from '../../agent/agent';
 import { createConversationManager } from '../../agent/conversation';
-import { createToolRegistry } from '../../agent/tool-registry';
 import { buildSystemPrompt } from '../../agent/system-prompt';
-import { createBuiltInTools } from '../../agent/tools/built-in-tools';
 import { createHookManager, type HookManager } from '../../agent/plugins/hook-manager';
 import { loadPlugins } from '../../agent/plugins/plugin-loader';
-import type { Renderer } from '../utils/renderer';
-import type { Spinner } from '../utils/spinner';
+
+function toMastraModelConfig(llm: LLMConfig): MastraModelConfig {
+  if (llm.provider === 'ollama') {
+    return {
+      id: `custom/${llm.model}` as `${string}/${string}`,
+      url: `${llm.baseUrl.replace(/\/$/, '')}/v1`,
+    };
+  }
+
+  // Mastra reads API keys from env vars automatically:
+  // ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY
+  return `${llm.provider}/${llm.model}` as `${string}/${string}`;
+}
 
 export async function buildAgent(
-    config: MasterMindConfig,
-    renderer: Renderer,
-    spinner: Spinner,
+  config: MasterMindConfig,
+  eventHandler: AgentEventHandler,
 ): Promise<{ agent: Agent; hookManager: HookManager }> {
-    const provider = createLLMProvider(config.llm);
-    const conversation = createConversationManager();
-    const hookManager = createHookManager();
-    const toolRegistry = createToolRegistry(hookManager);
+  const conversation = createConversationManager();
+  const hookManager = createHookManager();
 
-    for (const tool of createBuiltInTools(config)) {
-        toolRegistry.register(tool);
-    }
+  await loadPlugins(config, hookManager);
 
-    await loadPlugins(config, toolRegistry, hookManager);
+  const modelConfig = toMastraModelConfig(config.llm);
+  const systemPrompt = buildSystemPrompt(config, []);
 
-    const agent = createAgent({
-        provider,
-        conversation,
-        toolRegistry,
-        renderer,
-        spinner,
-        systemPrompt: buildSystemPrompt(config, toolRegistry.list()),
-        maxIterations: config.agent.maxIterations,
-        hookManager,
-        streamHandler: {
-            onText(chunk: string) {
-                spinner.stop();
-                renderer.streamText(chunk);
-            },
-            onToolUse(_id: string, name: string, _input: Record<string, unknown>) {
-                spinner.stop();
-                renderer.endStream();
-                void name;
-            },
-            onError(error: Error) {
-                spinner.stop();
-                renderer.endStream();
-                renderer.error(error.message);
-            },
-        },
-    });
+  const mastraAgent = new MastraAgent({
+    id: 'master_mind',
+    name: 'Master Mind',
+    instructions: systemPrompt,
+    model: modelConfig,
+  });
 
-    return { agent, hookManager };
+  const agent = new Agent(
+    mastraAgent,
+    conversation,
+    eventHandler,
+    config.llm.provider,
+    config.llm.model,
+    hookManager,
+  );
+
+  return { agent, hookManager };
 }

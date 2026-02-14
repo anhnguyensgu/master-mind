@@ -20,7 +20,6 @@ export function loadConfig(): MasterMindConfig {
   return {
     llm: {
       provider,
-      apiKey: Bun.env.LLM_API_KEY || '',
       model: Bun.env.LLM_MODEL || DEFAULT_MODELS[provider] || DEFAULT_MODELS.anthropic,
       baseUrl: Bun.env.LLM_BASE_URL || DEFAULT_BASE_URLS[provider] || DEFAULT_BASE_URLS.anthropic,
       maxTokens: Number(Bun.env.LLM_MAX_TOKENS) || 4096,

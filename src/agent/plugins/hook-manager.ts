@@ -1,5 +1,4 @@
 import type { PluginHooks, PluginContext } from './plugin.types';
-import type { ToolExecutionResult } from '../agent.types';
 
 export interface HookManager {
   register(pluginName: string, hooks: PluginHooks): void;
@@ -7,15 +6,6 @@ export interface HookManager {
   runOnShutdown(): Promise<void>;
   runBeforeMessage(message: string): Promise<string>;
   runAfterResponse(response: { content: string; stopReason: string }): Promise<void>;
-  runBeforeToolExecute(
-    name: string,
-    input: Record<string, unknown>,
-  ): Promise<{ name: string; input: Record<string, unknown> } | null>;
-  runAfterToolExecute(
-    name: string,
-    input: Record<string, unknown>,
-    result: ToolExecutionResult,
-  ): Promise<ToolExecutionResult>;
 }
 
 export function createHookManager(): HookManager {
@@ -59,27 +49,6 @@ export function createHookManager(): HookManager {
       for (const { hooks } of entries) {
         if (hooks.afterResponse) await hooks.afterResponse(response);
       }
-    },
-
-    async runBeforeToolExecute(name, input) {
-      let current: { name: string; input: Record<string, unknown> } | null = { name, input };
-      for (const { hooks } of entries) {
-        if (current === null) break;
-        if (hooks.beforeToolExecute) {
-          current = await hooks.beforeToolExecute(current.name, current.input);
-        }
-      }
-      return current;
-    },
-
-    async runAfterToolExecute(name, input, result) {
-      let current = result;
-      for (const { hooks } of entries) {
-        if (hooks.afterToolExecute) {
-          current = await hooks.afterToolExecute(name, input, current);
-        }
-      }
-      return current;
     },
   };
 }

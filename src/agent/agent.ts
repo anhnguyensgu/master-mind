@@ -1,131 +1,148 @@
-import type { TokenUsage } from './agent.types';
-import type { LLMContentBlock, LLMTextBlock, LLMToolUseBlock, LLMProvider, StreamCallbacks } from './llm/llm.types';
+import { Agent as MastraAgent } from '@mastra/core/agent';
 import type { HookManager } from './plugins/hook-manager';
-import type { Renderer } from '../cli/utils/renderer';
-import type { Spinner } from '../cli/utils/spinner';
 import type { ConversationManager } from './conversation';
-import type { ToolRegistry } from './tool-registry';
+import type { ChatItem } from '../shared/stream/chatItems';
+import { createStreamParser } from '../shared/stream/streamParser';
+import { CHAT_ITEM_TYPE } from '../shared/stream/chatItems';
 
-export interface Agent {
-  handleMessage(input: string): Promise<void>;
-  readonly usage: TokenUsage;
-  readonly conversation: ConversationManager;
-  readonly providerName: string;
-  readonly model: string;
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
 }
 
-async function runToolUseLoop(
-  assistantContent: LLMContentBlock[],
-  renderer: Renderer,
-  toolRegistry: ToolRegistry,
-  conversation: ConversationManager,
-): Promise<void> {
-  const toolUseBlocks = assistantContent.filter(
-    (b): b is LLMToolUseBlock => b.type === 'tool_use',
-  );
+/** The only contract between agent and the UI — a simple event publisher */
+export interface AgentEventHandler {
+  onItem(item: ChatItem): void;
+  onStreamDelta(text: string): void;
+}
 
-  if (toolUseBlocks.length === 0) return;
+export class Agent {
+  private mastraAgent: MastraAgent;
+  private messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+  private totalUsage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
 
-  const toolResults: LLMContentBlock[] = [];
+  conversation: ConversationManager;
+  eventHandler: AgentEventHandler;
+  providerName: string;
+  model: string;
+  hookManager?: HookManager;
 
-  for (const toolUse of toolUseBlocks) {
-    renderer.toolStart(toolUse.name, toolUse.input);
-    const startTime = Date.now();
-
-    const result = await toolRegistry.execute(toolUse.name, toolUse.input);
-    const duration = Date.now() - startTime;
-
-    if (result.isError) {
-      renderer.toolError(toolUse.name, result.content);
-    } else {
-      renderer.toolEnd(toolUse.name, duration);
-    }
-
-    toolResults.push({
-      type: 'tool_result',
-      tool_use_id: toolUse.id,
-      content: result.content,
-      is_error: result.isError,
-    });
+  constructor(
+    mastraAgent: MastraAgent,
+    conversation: ConversationManager,
+    eventHandler: AgentEventHandler,
+    providerName: string,
+    model: string,
+    hookManager?: HookManager,
+  ) {
+    this.mastraAgent = mastraAgent;
+    this.conversation = conversation;
+    this.eventHandler = eventHandler;
+    this.providerName = providerName;
+    this.model = model;
+    this.hookManager = hookManager;
   }
 
-  conversation.addToolResults(toolResults);
-}
+  get usage(): TokenUsage {
+    return this.totalUsage;
+  }
 
-export interface AgentDeps {
-  provider: LLMProvider;
-  conversation: ConversationManager;
-  toolRegistry: ToolRegistry;
-  renderer: Renderer;
-  spinner: Spinner;
-  streamHandler: StreamCallbacks;
-  systemPrompt: string;
-  maxIterations: number;
-  hookManager?: HookManager;
-}
+  async handleMessage(input: string): Promise<void> {
+    const processedInput = this.hookManager
+      ? await this.hookManager.runBeforeMessage(input)
+      : input;
 
-export function createAgent(deps: AgentDeps): Agent {
-  const { provider, conversation, toolRegistry, renderer, spinner, streamHandler, systemPrompt, maxIterations, hookManager } = deps;
+    this.conversation.addUserMessage(processedInput);
+    this.messages.push({ role: 'user', content: processedInput });
 
-  return {
-    async handleMessage(input: string) {
-      const processedInput = hookManager
-        ? await hookManager.runBeforeMessage(input)
-        : input;
+    const parser = createStreamParser((item) => this.eventHandler.onItem(item));
 
-      conversation.addUserMessage(processedInput);
-      spinner.start('Thinking...');
+    try {
+      const output = await this.mastraAgent.stream(this.messages);
+      const toolStartTimes = new Map<string, number>();
 
-      let iterations = 0;
+      for await (const chunk of output.fullStream) {
+        switch (chunk.type) {
+          case 'text-delta':
+            parser.feed(chunk.textDelta);
+            this.eventHandler.onStreamDelta(parser.getCurrentLine());
+            break;
 
-      try {
-        while (iterations < maxIterations) {
-          iterations++;
-
-          const response = await provider.streamMessage(
-            conversation.getMessages(),
-            systemPrompt,
-            toolRegistry.getLLMTools(),
-            streamHandler,
-          );
-
-          renderer.endStream();
-          conversation.addAssistantMessage(response.content);
-
-          // If the model didn't request tool use, we're done
-          if (response.stopReason !== 'tool_use') {
-            if (hookManager) {
-              const textContent = response.content
-                .filter((b): b is LLMTextBlock => b.type === 'text')
-                .map((b) => b.text)
-                .join('');
-              await hookManager.runAfterResponse({ content: textContent, stopReason: response.stopReason });
+          case 'tool-call':
+            parser.flush();
+            this.eventHandler.onStreamDelta('');
+            toolStartTimes.set(chunk.toolCallId, Date.now());
+            {
+              const inputStr = JSON.stringify(chunk.args, null, 0);
+              const truncated = inputStr.length > 100 ? inputStr.slice(0, 97) + '...' : inputStr;
+              this.eventHandler.onItem({
+                type: CHAT_ITEM_TYPE.TOOL_START,
+                name: chunk.toolName,
+                input: truncated,
+              });
             }
             break;
-          }
 
-          // Execute tools and continue the loop
-          spinner.start('Running tools...');
-          await runToolUseLoop(response.content, renderer, toolRegistry, conversation);
-          spinner.start('Thinking...');
-        }
+          case 'tool-result':
+            {
+              const startTime = toolStartTimes.get(chunk.toolCallId);
+              const duration = startTime ? Date.now() - startTime : 0;
+              toolStartTimes.delete(chunk.toolCallId);
 
-        if (iterations >= maxIterations) {
-          renderer.warning(`\nReached maximum iterations (${maxIterations}). Stopping.`);
+              const result = chunk.result as { isError?: boolean } | undefined;
+              if (result?.isError) {
+                this.eventHandler.onItem({
+                  type: CHAT_ITEM_TYPE.TOOL_ERROR,
+                  name: chunk.toolName,
+                  error: String(chunk.result),
+                });
+              } else {
+                this.eventHandler.onItem({
+                  type: CHAT_ITEM_TYPE.TOOL_END,
+                  name: chunk.toolName,
+                  durationMs: duration,
+                });
+              }
+            }
+            break;
+
+          case 'error':
+            parser.flush();
+            this.eventHandler.onStreamDelta('');
+            this.eventHandler.onItem({
+              type: CHAT_ITEM_TYPE.ERROR,
+              message: String(chunk.error),
+            });
+            break;
         }
-      } catch (error) {
-        spinner.stop();
-        renderer.endStream();
-        const message = error instanceof Error ? error.message : String(error);
-        renderer.error(message);
       }
-    },
 
-    get usage() {
-      return provider.getUsage();
-    },
-    conversation,
-    providerName: provider.name,
-    model: provider.model,
-  };
+      // Flush remaining text
+      parser.flush();
+      this.eventHandler.onStreamDelta('');
+
+      // Accumulate usage
+      const usage = await output.usage;
+      this.totalUsage.inputTokens += usage.promptTokens ?? 0;
+      this.totalUsage.outputTokens += usage.completionTokens ?? 0;
+
+      // Accumulate assistant response for multi-turn
+      const text = await output.text;
+      if (text) {
+        this.messages.push({ role: 'assistant', content: text });
+        this.conversation.addAssistantMessage(text);
+      }
+
+      // Run afterResponse hook
+      if (this.hookManager) {
+        const finishReason = await output.finishReason;
+        await this.hookManager.runAfterResponse({ content: text, stopReason: finishReason ?? 'end' });
+      }
+    } catch (error) {
+      parser.flush();
+      this.eventHandler.onStreamDelta('');
+      const message = error instanceof Error ? error.message : String(error);
+      this.eventHandler.onItem({ type: CHAT_ITEM_TYPE.ERROR, message });
+    }
+  }
 }

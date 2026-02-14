@@ -2,7 +2,6 @@ export type LLMProviderName = 'anthropic' | 'openai' | 'ollama' | 'mock';
 
 export interface LLMConfig {
   provider: LLMProviderName;
-  apiKey: string;
   model: string;
   baseUrl: string;
   maxTokens: number;

@@ -1,4 +1,5 @@
-import type { AgentTool } from '../agent.types';
+import { createTool } from '@mastra/core/tools';
+import { z } from 'zod';
 
 // Commands that are never allowed (checked against whitespace-collapsed input)
 const DENIED_COMMANDS = [
@@ -56,74 +57,61 @@ export function isCommandDenied(command: string): string | null {
   return null;
 }
 
-export function createBashTool(): AgentTool {
-  return {
-    name: 'bash',
-    description:
-      'Execute a shell command. Use for general-purpose operations like checking disk space, listing processes, reading files, etc. Destructive commands are blocked for safety.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        command: {
-          type: 'string',
-          description: 'The shell command to execute',
-        },
-        timeout: {
-          type: 'number',
-          description: 'Timeout in milliseconds (default: 30000)',
-        },
-      },
-      required: ['command'],
-    },
+export const bashTool = createTool({
+  id: 'bash',
+  description:
+    'Execute a shell command. Use for general-purpose operations like checking disk space, listing processes, reading files, etc. Destructive commands are blocked for safety.',
+  inputSchema: z.object({
+    command: z.string().describe('The shell command to execute'),
+    timeout: z.number().optional().describe('Timeout in milliseconds (default: 30000)'),
+  }),
 
-    async execute(input) {
-      const command = input.command as string;
-      const timeout = (input.timeout as number) || 30_000;
+  execute: async ({ context: { command, timeout: timeoutMs } }) => {
+    const timeout = timeoutMs || 30_000;
 
-      const denial = isCommandDenied(command);
-      if (denial) {
-        return { content: denial, isError: true };
+    const denial = isCommandDenied(command);
+    if (denial) {
+      return { content: denial, isError: true };
+    }
+
+    try {
+      const proc = Bun.spawn(['bash', '-c', command], {
+        stdout: 'pipe',
+        stderr: 'pipe',
+        env: process.env,
+      });
+
+      // Set up timeout
+      const timeoutId = setTimeout(() => {
+        proc.kill();
+      }, timeout);
+
+      const [stdout, stderr] = await Promise.all([
+        new Response(proc.stdout).text(),
+        new Response(proc.stderr).text(),
+      ]);
+
+      clearTimeout(timeoutId);
+      const exitCode = await proc.exited;
+
+      let output = '';
+      if (stdout) output += stdout;
+      if (stderr) output += (output ? '\n' : '') + `stderr: ${stderr}`;
+      if (!output) output = `(no output, exit code: ${exitCode})`;
+
+      // Truncate very long output
+      if (output.length > MAX_OUTPUT_LENGTH) {
+        output = output.slice(0, MAX_OUTPUT_LENGTH) + '\n...(truncated)';
       }
 
-      try {
-        const proc = Bun.spawn(['bash', '-c', command], {
-          stdout: 'pipe',
-          stderr: 'pipe',
-          env: process.env,
-        });
-
-        // Set up timeout
-        const timeoutId = setTimeout(() => {
-          proc.kill();
-        }, timeout);
-
-        const [stdout, stderr] = await Promise.all([
-          new Response(proc.stdout).text(),
-          new Response(proc.stderr).text(),
-        ]);
-
-        clearTimeout(timeoutId);
-        const exitCode = await proc.exited;
-
-        let output = '';
-        if (stdout) output += stdout;
-        if (stderr) output += (output ? '\n' : '') + `stderr: ${stderr}`;
-        if (!output) output = `(no output, exit code: ${exitCode})`;
-
-        // Truncate very long output
-        if (output.length > MAX_OUTPUT_LENGTH) {
-          output = output.slice(0, MAX_OUTPUT_LENGTH) + '\n...(truncated)';
-        }
-
-        if (exitCode !== 0) {
-          output = `Exit code: ${exitCode}\n${output}`;
-        }
-
-        return { content: output, isError: exitCode !== 0 };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { content: `Command failed: ${message}`, isError: true };
+      if (exitCode !== 0) {
+        output = `Exit code: ${exitCode}\n${output}`;
       }
-    },
-  };
-}
+
+      return { content: output, isError: exitCode !== 0 };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return { content: `Command failed: ${message}`, isError: true };
+    }
+  },
+});
