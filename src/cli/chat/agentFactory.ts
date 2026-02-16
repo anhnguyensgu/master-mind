@@ -1,25 +1,17 @@
 import { Agent as MastraAgent } from '@mastra/core/agent';
-import type { MasterMindConfig, LLMConfig } from '../../config/config.types';
-import type { MastraModelConfig } from '@mastra/core/agent';
-
+import type { MasterMindConfig } from '../../config/config.types';
 import { Agent, type AgentEventHandler } from '../../agent/agent';
 import { createConversationManager } from '../../agent/conversation';
 import { buildSystemPrompt } from '../../agent/system-prompt';
 import { createHookManager, type HookManager } from '../../agent/plugins/hook-manager';
 import { loadPlugins } from '../../agent/plugins/plugin-loader';
-
-function toMastraModelConfig(llm: LLMConfig): MastraModelConfig {
-  if (llm.provider === 'ollama') {
-    return {
-      id: `custom/${llm.model}` as `${string}/${string}`,
-      url: `${llm.baseUrl.replace(/\/$/, '')}/v1`,
-    };
-  }
-
-  // Mastra reads API keys from env vars automatically:
-  // ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY
-  return `${llm.provider}/${llm.model}` as `${string}/${string}`;
-}
+import {
+  testTool,
+  bashTool,
+  cloudCliTool,
+  resourceListTool,
+  resourceMetricsTool,
+} from '../../agent/tools';
 
 export async function buildAgent(
   config: MasterMindConfig,
@@ -30,14 +22,21 @@ export async function buildAgent(
 
   await loadPlugins(config, hookManager);
 
-  const modelConfig = toMastraModelConfig(config.llm);
-  const systemPrompt = buildSystemPrompt(config, []);
+  const toolNames = ['cost_query', 'bash', 'cloud_cli', 'resource_list', 'resource_metrics'];
+  const systemPrompt = buildSystemPrompt(config, toolNames);
 
   const mastraAgent = new MastraAgent({
     id: 'master_mind',
     name: 'Master Mind',
     instructions: systemPrompt,
-    model: modelConfig,
+    model: `${config.llm.provider}/${config.llm.model}` as `${string}/${string}`,
+    tools: {
+      cost_query: testTool,
+      bash: bashTool,
+      cloud_cli: cloudCliTool,
+      resource_list: resourceListTool,
+      resource_metrics: resourceMetricsTool,
+    },
   });
 
   const agent = new Agent(

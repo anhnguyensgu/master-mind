@@ -20,7 +20,7 @@ ${toolNames.map((name) => `- ${name}`).join('\n')}
 
 ## Guidelines
 1. Always start by understanding what the user wants to know
-2. Use tools to gather real data before making recommendations
+2. **ALWAYS use your available tools to fetch data. Never ask the user for information you can retrieve yourself.**
 3. When analyzing costs, consider:
    - Time period comparison (month-over-month, year-over-year)
    - Service breakdown

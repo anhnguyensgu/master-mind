@@ -29,7 +29,20 @@ export function TextInput({ locked, onSubmit, onQuit }: TextInputProps) {
   }, [state, prevStateRef, onSubmit]);
 
   useInput((input, key) => {
-    if (key.return) {
+    // Handle backspace - Ghostty and modern terminals send DEL (key.delete)
+    if (key.delete || key.backspace) {
+      dispatch({ type: 'BACKSPACE' });
+      return;
+    }
+
+    // Meta+Enter (Shift+Enter in Ghostty) = add newline without submitting
+    if (key.meta && (key.return || input === '\r')) {
+      dispatch({ type: 'NEWLINE' });
+      return;
+    }
+
+    // Regular Enter - check for backslash continuation or submit
+    if (key.return || input === '\r') {
       const s = stateRef.current;
       const currentLine = s.lines[s.cursorRow]!;
       if (currentLine.endsWith('\\')) {
@@ -39,11 +52,6 @@ export function TextInput({ locked, onSubmit, onQuit }: TextInputProps) {
       } else {
         dispatch({ type: 'SUBMIT' });
       }
-      return;
-    }
-
-    if (key.backspace || key.delete) {
-      dispatch({ type: key.backspace ? 'BACKSPACE' : 'DELETE' });
       return;
     }
 

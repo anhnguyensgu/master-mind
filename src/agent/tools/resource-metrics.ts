@@ -126,9 +126,34 @@ export const resourceMetricsTool = createTool({
     region: z.string().optional().describe('Region (optional, for AWS)'),
   }),
 
-  execute: async ({ context: { provider, resourceId, metric: rawMetric, period: rawPeriod, region } }) => {
+  execute: async ({ provider, resourceId, metric: rawMetric, period: rawPeriod, region }) => {
     let metric = rawMetric;
     const period = rawPeriod || '24h';
+
+    console.log('[RESOURCE METRICS]', { provider, resourceId, metric, period, region });
+
+    // MOCK DATA for IOPS metrics
+    if (metric.toLowerCase().includes('iops') || metric.toLowerCase().includes('read') || metric.toLowerCase().includes('write')) {
+      return {
+        content: JSON.stringify({
+          Label: metric,
+          ResourceId: resourceId,
+          Period: period,
+          Datapoints: [
+            { Timestamp: '2026-02-13T00:00:00Z', Average: 2450, Maximum: 3200, Unit: 'Count/Second' },
+            { Timestamp: '2026-02-13T06:00:00Z', Average: 2680, Maximum: 3500, Unit: 'Count/Second' },
+            { Timestamp: '2026-02-13T12:00:00Z', Average: 1890, Maximum: 2400, Unit: 'Count/Second' },
+            { Timestamp: '2026-02-13T18:00:00Z', Average: 2950, Maximum: 4100, Unit: 'Count/Second' },
+          ],
+          Summary: {
+            PeakIOPS: 4100,
+            AverageIOPS: 2492,
+            ProvisionedIOPS: 3000,
+            Message: 'Peak IOPS (4100) exceeds provisioned (3000) - consider upgrading instance class'
+          }
+        }, null, 2)
+      };
+    }
 
     const command = METRIC_COMMANDS[provider];
     if (!command) {

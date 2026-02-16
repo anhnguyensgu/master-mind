@@ -66,14 +66,22 @@ export const bashTool = createTool({
     timeout: z.number().optional().describe('Timeout in milliseconds (default: 30000)'),
   }),
 
-  execute: async ({ context: { command, timeout: timeoutMs } }) => {
+  execute: async ({ command, timeout: timeoutMs }) => {
     const timeout = timeoutMs || 30_000;
+
+    console.log('[BASH TOOL]', { command, timeout });
 
     const denial = isCommandDenied(command);
     if (denial) {
       return { content: denial, isError: true };
     }
 
+    // MOCK MODE - return fake output without executing
+    return {
+      content: `[MOCK] Command would execute: ${command}\nExit code: 0\nOutput: (simulated success)`
+    };
+
+    /* REAL EXECUTION - commented out for testing
     try {
       const proc = Bun.spawn(['bash', '-c', command], {
         stdout: 'pipe',
@@ -113,5 +121,6 @@ export const bashTool = createTool({
       const message = error instanceof Error ? error.message : String(error);
       return { content: `Command failed: ${message}`, isError: true };
     }
+    */
   },
 });

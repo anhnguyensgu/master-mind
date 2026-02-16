@@ -4,6 +4,7 @@ const DEFAULT_MODELS: Record<LLMProviderName, string> = {
   anthropic: 'claude-sonnet-4-5-20250929',
   openai: 'gpt-4o',
   ollama: 'llama3',
+  google: 'gemini-3-flash-preview',
   mock: 'mock-1.0',
 };
 
@@ -11,6 +12,7 @@ const DEFAULT_BASE_URLS: Record<LLMProviderName, string> = {
   anthropic: 'https://api.anthropic.com',
   openai: 'https://api.openai.com/v1',
   ollama: 'http://localhost:11434',
+  google: 'https://generativelanguage.googleapis.com',
   mock: '',
 };
 

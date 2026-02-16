@@ -3,6 +3,7 @@ import type { ChatItem } from '../../../shared/stream/chatItems';
 import { CHAT_ITEM_TYPE } from '../../../shared/stream/chatItems';
 import { COMMANDS } from '../commands.ts';
 import { InlineText } from '../../ui/InlineText.tsx';
+import { ToolProgress } from './ToolProgress.tsx';
 
 export function ChatItemView({ item }: { item: ChatItem }) {
   switch (item.type) {
@@ -75,13 +76,9 @@ export function ChatItemView({ item }: { item: ChatItem }) {
       return <Text>{' '}</Text>;
 
     case CHAT_ITEM_TYPE.TOOL_START:
-      return <Text>  <Text color="yellow">{'\u26a1'} {item.name}</Text> <Text dimColor>{item.input}</Text></Text>;
-
     case CHAT_ITEM_TYPE.TOOL_END:
-      return <Text>  <Text color="green">{'\u2713'} {item.name}</Text> <Text dimColor>({item.durationMs}ms)</Text></Text>;
-
     case CHAT_ITEM_TYPE.TOOL_ERROR:
-      return <Text>  <Text color="red">{'\u2717'} {item.name}</Text>: {item.error}</Text>;
+      return <ToolProgress item={item} />;
 
     case CHAT_ITEM_TYPE.ERROR:
       return <Text color="red">Error: {item.message}</Text>;

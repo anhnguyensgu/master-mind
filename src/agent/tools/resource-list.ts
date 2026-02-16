@@ -13,6 +13,7 @@ const RESOURCE_COMMANDS: Record<CloudProvider, Record<string, ResourceCommand>> 
     ec2: { cli: 'aws', args: ['ec2', 'describe-instances'] },
     s3: { cli: 'aws', args: ['s3api', 'list-buckets'] },
     rds: { cli: 'aws', args: ['rds', 'describe-db-instances'] },
+    documentdb: { cli: 'aws', args: ['docdb', 'describe-db-clusters'] },
     lambda: { cli: 'aws', args: ['lambda', 'list-functions'] },
     ebs: { cli: 'aws', args: ['ec2', 'describe-volumes'] },
     elb: { cli: 'aws', args: ['elbv2', 'describe-load-balancers'] },
@@ -53,13 +54,51 @@ export const resourceListTool = createTool({
   inputSchema: z.object({
     provider: z.enum(['aws', 'gcp', 'azure']).describe('Cloud provider'),
     resourceType: z.string().describe(
-      'Resource type to list. AWS: ec2, s3, rds, lambda, ebs, elb, ecs, eks, dynamodb, elasticache, cloudfront, sqs, sns. GCP: compute, storage, sql, functions, gke, pubsub, run. Azure: vm, storage, sql, functions, aks, webapp, cosmosdb.',
+      'Resource type to list. AWS: ec2, s3, rds, documentdb, lambda, ebs, elb, ecs, eks, dynamodb, elasticache, cloudfront, sqs, sns. GCP: compute, storage, sql, functions, gke, pubsub, run. Azure: vm, storage, sql, functions, aks, webapp, cosmosdb.',
     ),
     region: z.string().optional().describe('Region to query (optional, uses CLI default if not specified)'),
   }),
 
-  execute: async ({ context: { provider, resourceType: rawType, region } }) => {
+  execute: async ({ provider, resourceType: rawType, region }) => {
     const resourceType = rawType.toLowerCase();
+
+    console.log('[RESOURCE LIST]', { provider, resourceType, region });
+
+    // MOCK DATA for testing
+    if (resourceType === 'documentdb') {
+      return {
+        content: JSON.stringify({
+          DBClusters: [
+            {
+              DBClusterIdentifier: 'prod-docdb-cluster-1',
+              Engine: 'docdb',
+              EngineVersion: '5.0.0',
+              Status: 'available',
+              DBClusterInstanceClass: 'db.r5.large',
+              StorageType: 'standard',
+              AllocatedStorage: 100,
+              Endpoint: 'prod-docdb-cluster-1.cluster-abc123.us-east-1.docdb.amazonaws.com',
+              Port: 27017,
+              DBClusterMembers: [
+                { DBInstanceIdentifier: 'prod-docdb-instance-1', IsClusterWriter: true },
+                { DBInstanceIdentifier: 'prod-docdb-instance-2', IsClusterWriter: false }
+              ],
+              AvailableMetrics: [
+                'ReadIOPS',
+                'WriteIOPS',
+                'CPUUtilization',
+                'FreeableMemory',
+                'DatabaseConnections',
+                'NetworkThroughput',
+                'ReadLatency',
+                'WriteLatency',
+                'DiskQueueDepth'
+              ]
+            }
+          ]
+        }, null, 2)
+      };
+    }
 
     const providerCommands = RESOURCE_COMMANDS[provider];
     if (!providerCommands) {

@@ -29,7 +29,7 @@ export type ChatItem =
   | { type: typeof CHAT_ITEM_TYPE.DIVIDER }
   | { type: typeof CHAT_ITEM_TYPE.NEWLINE }
   | { type: typeof CHAT_ITEM_TYPE.TOOL_START; name: string; input: string }
-  | { type: typeof CHAT_ITEM_TYPE.TOOL_END; name: string; durationMs: number }
+  | { type: typeof CHAT_ITEM_TYPE.TOOL_END; name: string; durationMs: number; result: string }
   | { type: typeof CHAT_ITEM_TYPE.TOOL_ERROR; name: string; error: string }
   | { type: typeof CHAT_ITEM_TYPE.ERROR; message: string }
   | { type: typeof CHAT_ITEM_TYPE.INFO; message: string }

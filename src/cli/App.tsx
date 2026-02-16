@@ -15,6 +15,7 @@ export function App({ config }: AppProps) {
     chatLog,
     streamText,
     locked,
+    activeToolName,
     statusBarInfo,
     submit,
     quit,
@@ -29,7 +30,7 @@ export function App({ config }: AppProps) {
           </Box>
         )}
       </Static>
-      <Spinner active={locked} message="Thinking..." />
+      <Spinner active={locked} message={activeToolName ? `Running ${activeToolName}...` : 'Thinking...'} />
       {streamText ? <Text>{streamText}</Text> : null}
       <StatusBar {...statusBarInfo} />
       <TextInput locked={locked} onSubmit={submit} onQuit={quit} />

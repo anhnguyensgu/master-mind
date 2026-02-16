@@ -15,8 +15,8 @@
   },
   "scripts": {
     "dev": "bun --hot src/main.ts",
-    "start": "bun src/main.ts",
-    "cli": "LLM_PROVIDER=mock bun --watch src/cli/cli.ts",
+    "start": "bun src/cli/cli.ts",
+    "cli": "bun --watch src/cli/cli.ts",
     "test": "bun test"
   },
   "dependencies": {

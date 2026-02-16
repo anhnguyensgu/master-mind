@@ -1,4 +1,4 @@
-export type LLMProviderName = 'anthropic' | 'openai' | 'ollama' | 'mock';
+export type LLMProviderName = 'anthropic' | 'openai' | 'ollama' | 'google' | 'mock';
 
 export interface LLMConfig {
   provider: LLMProviderName;

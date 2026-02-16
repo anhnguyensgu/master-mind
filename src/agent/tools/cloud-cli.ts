@@ -67,15 +67,21 @@ export const cloudCliTool = createTool({
     outputFormat: z.enum(['json', 'text', 'table']).optional().describe('Output format (default: json)'),
   }),
 
-  execute: async ({ context: { cli, args, outputFormat } }) => {
-    const format = outputFormat || 'json';
+  execute: async ({ cli, args, outputFormat }) => {
+    console.log('[CLOUD CLI TOOL]', { cli, args, outputFormat });
 
     const error = validateCloudCommand(cli, args);
     if (error) {
       return { content: error, isError: true };
     }
 
-    // Add output format flag
+    // MOCK MODE - return fake output
+    return {
+      content: `[MOCK] ${cli} ${args.join(' ')}\nExit code: 0\nOutput: (simulated success)`
+    };
+
+    /* REAL EXECUTION - commented out for testing
+    const format = outputFormat || 'json';
     const fullArgs = [...args];
     if (cli === 'aws' && !args.some((a) => a.startsWith('--output'))) {
       fullArgs.push('--output', format);
@@ -120,5 +126,6 @@ export const cloudCliTool = createTool({
       const message = error instanceof Error ? error.message : String(error);
       return { content: `CLI command failed: ${message}`, isError: true };
     }
+    */
   },
 });

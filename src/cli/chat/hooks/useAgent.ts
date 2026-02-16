@@ -19,6 +19,7 @@ export function useAgent(config: MasterMindConfig) {
     const [chatLog, setChatLog] = useState<ChatEntry[]>([]);
     const [streamText, setStreamText] = useState('');
     const [locked, setLocked] = useState(false);
+    const [activeToolName, setActiveToolName] = useState<string | null>(null);
     const [statusBarInfo, setStatusBarInfo] = useState<{
         provider: string;
         model: string;
@@ -46,6 +47,11 @@ export function useAgent(config: MasterMindConfig) {
 
         const eventHandler: AgentEventHandler = {
             onItem(item: ChatItem) {
+                if (item.type === CHAT_ITEM_TYPE.TOOL_START) {
+                    setActiveToolName(item.name);
+                } else if (item.type === CHAT_ITEM_TYPE.TOOL_END || item.type === CHAT_ITEM_TYPE.TOOL_ERROR) {
+                    setActiveToolName(null);
+                }
                 appendItem(item);
             },
             onStreamDelta(text: string) {
@@ -119,6 +125,7 @@ export function useAgent(config: MasterMindConfig) {
         chatLog,
         streamText,
         locked,
+        activeToolName,
         statusBarInfo,
         submit,
         quit,

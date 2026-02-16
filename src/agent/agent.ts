@@ -64,20 +64,20 @@ export class Agent {
       for await (const chunk of output.fullStream) {
         switch (chunk.type) {
           case 'text-delta':
-            parser.feed(chunk.textDelta);
+            parser.feed(chunk?.payload.text);
             this.eventHandler.onStreamDelta(parser.getCurrentLine());
             break;
 
           case 'tool-call':
             parser.flush();
             this.eventHandler.onStreamDelta('');
-            toolStartTimes.set(chunk.toolCallId, Date.now());
+            toolStartTimes.set(chunk.payload.toolCallId, Date.now());
             {
-              const inputStr = JSON.stringify(chunk.args, null, 0);
+              const inputStr = JSON.stringify(chunk.payload.args, null, 0);
               const truncated = inputStr.length > 100 ? inputStr.slice(0, 97) + '...' : inputStr;
               this.eventHandler.onItem({
                 type: CHAT_ITEM_TYPE.TOOL_START,
-                name: chunk.toolName,
+                name: chunk.payload.toolName,
                 input: truncated,
               });
             }
@@ -85,22 +85,26 @@ export class Agent {
 
           case 'tool-result':
             {
-              const startTime = toolStartTimes.get(chunk.toolCallId);
+              const startTime = toolStartTimes.get(chunk.payload.toolCallId);
               const duration = startTime ? Date.now() - startTime : 0;
-              toolStartTimes.delete(chunk.toolCallId);
+              toolStartTimes.delete(chunk.payload.toolCallId);
 
-              const result = chunk.result as { isError?: boolean } | undefined;
+              const result = chunk.payload.result as { content?: string; isError?: boolean } | undefined;
+              const content = typeof result?.content === 'string' ? result.content : '';
+              const truncatedResult = content.length > 500 ? content.slice(0, 497) + '...' : content;
+
               if (result?.isError) {
                 this.eventHandler.onItem({
                   type: CHAT_ITEM_TYPE.TOOL_ERROR,
-                  name: chunk.toolName,
-                  error: String(chunk.result),
+                  name: chunk.payload.toolName,
+                  error: content || String(chunk.payload.result),
                 });
               } else {
                 this.eventHandler.onItem({
                   type: CHAT_ITEM_TYPE.TOOL_END,
-                  name: chunk.toolName,
+                  name: chunk.payload.toolName,
                   durationMs: duration,
+                  result: truncatedResult,
                 });
               }
             }
@@ -111,7 +115,7 @@ export class Agent {
             this.eventHandler.onStreamDelta('');
             this.eventHandler.onItem({
               type: CHAT_ITEM_TYPE.ERROR,
-              message: String(chunk.error),
+              message: String(chunk.payload.error),
             });
             break;
         }
@@ -123,8 +127,8 @@ export class Agent {
 
       // Accumulate usage
       const usage = await output.usage;
-      this.totalUsage.inputTokens += usage.promptTokens ?? 0;
-      this.totalUsage.outputTokens += usage.completionTokens ?? 0;
+      this.totalUsage.inputTokens += usage.inputTokens ?? 0;
+      this.totalUsage.outputTokens += usage.outputTokens ?? 0;
 
       // Accumulate assistant response for multi-turn
       const text = await output.text;
@@ -142,7 +146,7 @@ export class Agent {
       parser.flush();
       this.eventHandler.onStreamDelta('');
       const message = error instanceof Error ? error.message : String(error);
-      this.eventHandler.onItem({ type: CHAT_ITEM_TYPE.ERROR, message });
+      this.eventHandler.onItem({ type: CHAT_ITEM_TYPE.ERROR, message: `error from stream ${message}` });
     }
   }
 }
