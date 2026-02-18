@@ -68,11 +68,15 @@ export const cloudCliTool = createTool({
   }),
 
   execute: async ({ cli, args, outputFormat }) => {
-    console.log('[CLOUD CLI TOOL]', { cli, args, outputFormat });
-
     const error = validateCloudCommand(cli, args);
     if (error) {
       return { content: error, isError: true };
+    }
+
+    // Check if CLI is installed
+    const which = Bun.spawnSync(['which', cli]);
+    if (which.exitCode !== 0) {
+      return { content: `CLI not found: "${cli}" is not installed or not in PATH.`, isError: true };
     }
 
     // MOCK MODE - return fake output

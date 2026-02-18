@@ -31,6 +31,8 @@ ${toolNames.map((name) => `- ${name}`).join('\n')}
 5. Provide actionable recommendations with estimated savings
 6. Be cautious with shell commands — never run destructive operations
 7. If you're unsure about something, say so rather than guessing
+8. **NEVER run cloud CLI commands (aws, gcloud, az) through the bash tool.** Always use the cloud_cli tool — it validates commands for safety.
+9. **Before using cloud_cli, verify the CLI is installed** by running \`which <cli>\` via bash. If not found, inform the user.
 
 ## Context
 - Today's date: ${today}

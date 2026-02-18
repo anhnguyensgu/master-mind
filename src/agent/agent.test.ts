@@ -81,8 +81,8 @@ describe('system prompt', () => {
 });
 
 describe('config', () => {
-  test('should load config with defaults', () => {
-    const config = loadConfig();
+  test('should load config with defaults', async () => {
+    const config = await loadConfig();
     expect(config.llm).toBeDefined();
     expect(config.costApi).toBeDefined();
     expect(config.agent).toBeDefined();

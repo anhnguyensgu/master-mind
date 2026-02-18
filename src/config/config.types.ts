@@ -17,9 +17,15 @@ export interface AgentBehaviorConfig {
   maxIterations: number;
 }
 
+export interface PermissionsConfig {
+  allow?: string[];
+  deny?: string[];
+}
+
 export interface MasterMindConfig {
   llm: LLMConfig;
   costApi: CostApiConfig;
   agent: AgentBehaviorConfig;
   pluginConfigPath?: string;
+  permissions?: PermissionsConfig;
 }

@@ -130,8 +130,6 @@ export const resourceMetricsTool = createTool({
     let metric = rawMetric;
     const period = rawPeriod || '24h';
 
-    console.log('[RESOURCE METRICS]', { provider, resourceId, metric, period, region });
-
     // MOCK DATA for IOPS metrics
     if (metric.toLowerCase().includes('iops') || metric.toLowerCase().includes('read') || metric.toLowerCase().includes('write')) {
       return {

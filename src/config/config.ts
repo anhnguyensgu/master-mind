@@ -1,4 +1,5 @@
 import type { MasterMindConfig, LLMProviderName } from './config.types';
+import { loadSettings } from './settings';
 
 const DEFAULT_MODELS: Record<LLMProviderName, string> = {
   anthropic: 'claude-sonnet-4-5-20250929',
@@ -16,15 +17,17 @@ const DEFAULT_BASE_URLS: Record<LLMProviderName, string> = {
   mock: '',
 };
 
-export function loadConfig(): MasterMindConfig {
-  const provider = (Bun.env.LLM_PROVIDER as LLMProviderName) || 'anthropic';
+export async function loadConfig(): Promise<MasterMindConfig> {
+  const settings = await loadSettings();
+  const provider: LLMProviderName =
+    (Bun.env.LLM_PROVIDER as LLMProviderName) || settings.llm?.provider || 'anthropic';
 
   return {
     llm: {
       provider,
-      model: Bun.env.LLM_MODEL || DEFAULT_MODELS[provider] || DEFAULT_MODELS.anthropic,
-      baseUrl: Bun.env.LLM_BASE_URL || DEFAULT_BASE_URLS[provider] || DEFAULT_BASE_URLS.anthropic,
-      maxTokens: Number(Bun.env.LLM_MAX_TOKENS) || 4096,
+      model: Bun.env.LLM_MODEL || settings.llm?.model || DEFAULT_MODELS[provider] || DEFAULT_MODELS.anthropic,
+      baseUrl: Bun.env.LLM_BASE_URL || settings.llm?.baseUrl || DEFAULT_BASE_URLS[provider] || DEFAULT_BASE_URLS.anthropic,
+      maxTokens: Number(Bun.env.LLM_MAX_TOKENS) || settings.llm?.maxTokens || 4096,
     },
     costApi: {
       baseUrl: Bun.env.COST_API_BASE_URL || 'http://localhost:3000',
@@ -35,5 +38,6 @@ export function loadConfig(): MasterMindConfig {
       maxIterations: Number(Bun.env.MASTER_MIND_MAX_ITERATIONS) || 10,
     },
     pluginConfigPath: Bun.env.MASTER_MIND_PLUGIN_CONFIG || undefined,
+    permissions: settings.permissions,
   };
 }

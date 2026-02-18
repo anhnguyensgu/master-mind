@@ -62,8 +62,6 @@ export const resourceListTool = createTool({
   execute: async ({ provider, resourceType: rawType, region }) => {
     const resourceType = rawType.toLowerCase();
 
-    console.log('[RESOURCE LIST]', { provider, resourceType, region });
-
     // MOCK DATA for testing
     if (resourceType === 'documentdb') {
       return {

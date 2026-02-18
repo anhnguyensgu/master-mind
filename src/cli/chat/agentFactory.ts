@@ -6,11 +6,13 @@ import { buildSystemPrompt } from '../../agent/system-prompt';
 import { createHookManager, type HookManager } from '../../agent/plugins/hook-manager';
 import { loadPlugins } from '../../agent/plugins/plugin-loader';
 import {
-  testTool,
-  bashTool,
+  createBashTool,
   cloudCliTool,
   resourceListTool,
   resourceMetricsTool,
+  createCostQueryTool,
+  createCostSummaryTool,
+  createCostByServiceTool,
 } from '../../agent/tools';
 
 export async function buildAgent(
@@ -22,7 +24,12 @@ export async function buildAgent(
 
   await loadPlugins(config, hookManager);
 
-  const toolNames = ['cost_query', 'bash', 'cloud_cli', 'resource_list', 'resource_metrics'];
+  const bashTool = createBashTool(config.permissions);
+  const costQueryTool = createCostQueryTool(config.costApi);
+  const costSummaryTool = createCostSummaryTool(config.costApi);
+  const costByServiceTool = createCostByServiceTool(config.costApi);
+
+  const toolNames = ['cost_query', 'cost_summary', 'cost_by_service', 'bash', 'cloud_cli', 'resource_list', 'resource_metrics'];
   const systemPrompt = buildSystemPrompt(config, toolNames);
 
   const mastraAgent = new MastraAgent({
@@ -31,7 +38,9 @@ export async function buildAgent(
     instructions: systemPrompt,
     model: `${config.llm.provider}/${config.llm.model}` as `${string}/${string}`,
     tools: {
-      cost_query: testTool,
+      cost_query: costQueryTool,
+      cost_summary: costSummaryTool,
+      cost_by_service: costByServiceTool,
       bash: bashTool,
       cloud_cli: cloudCliTool,
       resource_list: resourceListTool,

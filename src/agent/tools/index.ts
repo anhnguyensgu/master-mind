@@ -1,8 +1,5 @@
-// Test tool
-export { testTool } from './test-tool';
-
 // Direct tool exports
-export { bashTool } from './bash';
+export { bashTool, createBashTool } from './bash';
 export { cloudCliTool } from './cloud-cli';
 export { resourceListTool } from './resource-list';
 export { resourceMetricsTool } from './resource-metrics';
