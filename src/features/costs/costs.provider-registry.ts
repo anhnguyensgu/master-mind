@@ -71,18 +71,5 @@ export function setCostProviderRegistry(
 
 export async function initializeCostProviders(): Promise<void> {
   const registry = getCostProviderRegistry();
-
-  // Register mock provider as default for development
-  const { createMockCostProvider } = await import(
-    './providers/mock.provider'
-  );
-  registry.registerFactory('aws', createMockCostProvider);
-
   await registry.initialize();
-
-  // If no providers were loaded from config, register mock directly
-  if (registry.listProviders().length === 0) {
-    const { MockCostProvider } = await import('./providers/mock.provider');
-    registry.registerProvider(new MockCostProvider());
-  }
 }

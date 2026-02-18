@@ -62,42 +62,6 @@ export const resourceListTool = createTool({
   execute: async ({ provider, resourceType: rawType, region }) => {
     const resourceType = rawType.toLowerCase();
 
-    // MOCK DATA for testing
-    if (resourceType === 'documentdb') {
-      return {
-        content: JSON.stringify({
-          DBClusters: [
-            {
-              DBClusterIdentifier: 'prod-docdb-cluster-1',
-              Engine: 'docdb',
-              EngineVersion: '5.0.0',
-              Status: 'available',
-              DBClusterInstanceClass: 'db.r5.large',
-              StorageType: 'standard',
-              AllocatedStorage: 100,
-              Endpoint: 'prod-docdb-cluster-1.cluster-abc123.us-east-1.docdb.amazonaws.com',
-              Port: 27017,
-              DBClusterMembers: [
-                { DBInstanceIdentifier: 'prod-docdb-instance-1', IsClusterWriter: true },
-                { DBInstanceIdentifier: 'prod-docdb-instance-2', IsClusterWriter: false }
-              ],
-              AvailableMetrics: [
-                'ReadIOPS',
-                'WriteIOPS',
-                'CPUUtilization',
-                'FreeableMemory',
-                'DatabaseConnections',
-                'NetworkThroughput',
-                'ReadLatency',
-                'WriteLatency',
-                'DiskQueueDepth'
-              ]
-            }
-          ]
-        }, null, 2)
-      };
-    }
-
     const providerCommands = RESOURCE_COMMANDS[provider];
     if (!providerCommands) {
       return { content: `Unknown provider: ${provider}`, isError: true };

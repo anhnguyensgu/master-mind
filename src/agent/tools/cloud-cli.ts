@@ -79,12 +79,6 @@ export const cloudCliTool = createTool({
       return { content: `CLI not found: "${cli}" is not installed or not in PATH.`, isError: true };
     }
 
-    // MOCK MODE - return fake output
-    return {
-      content: `[MOCK] ${cli} ${args.join(' ')}\nExit code: 0\nOutput: (simulated success)`
-    };
-
-    /* REAL EXECUTION - commented out for testing
     const format = outputFormat || 'json';
     const fullArgs = [...args];
     if (cli === 'aws' && !args.some((a) => a.startsWith('--output'))) {
@@ -130,6 +124,5 @@ export const cloudCliTool = createTool({
       const message = error instanceof Error ? error.message : String(error);
       return { content: `CLI command failed: ${message}`, isError: true };
     }
-    */
   },
 });

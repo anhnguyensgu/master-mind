@@ -90,12 +90,6 @@ export function createBashTool(permissions?: PermissionsConfig) {
         return { content: denial, isError: true };
       }
 
-      // MOCK MODE - return fake output without executing
-      return {
-        content: `[MOCK] Command would execute: ${command}\nExit code: 0\nOutput: (simulated success)`
-      };
-
-      /* REAL EXECUTION - commented out for testing
       try {
         const proc = Bun.spawn(['bash', '-c', command], {
           stdout: 'pipe',
@@ -135,7 +129,6 @@ export function createBashTool(permissions?: PermissionsConfig) {
         const message = error instanceof Error ? error.message : String(error);
         return { content: `Command failed: ${message}`, isError: true };
       }
-      */
     },
   });
 }
