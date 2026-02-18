@@ -1,8 +1,7 @@
-import { Box, Text, Static } from 'ink';
+import { Box } from 'ink';
 import type { MasterMindConfig } from '../config/config.types.ts';
 import { useAgent } from './chat/hooks/useAgent.ts';
-import { ChatItemView } from './chat/components/ChatItemView.tsx';
-import { Spinner } from './ui/SpinnerView.tsx';
+import { ScrollableOutput } from './chat/components/ScrollableOutput.tsx';
 import { StatusBar } from './ui/StatusBar.tsx';
 import { TextInput } from './ui/TextInput.tsx';
 
@@ -23,15 +22,12 @@ export function App({ config }: AppProps) {
 
   return (
     <Box flexDirection="column">
-      <Static items={chatLog}>
-        {(entry) => (
-          <Box key={entry.id}>
-            <ChatItemView item={entry.item} />
-          </Box>
-        )}
-      </Static>
-      <Spinner active={locked} message={activeToolName ? `Running ${activeToolName}...` : 'Thinking...'} />
-      {streamText ? <Text>{streamText}</Text> : null}
+      <ScrollableOutput
+        chatLog={chatLog}
+        streamText={streamText}
+        locked={locked}
+        activeToolName={activeToolName}
+      />
       <StatusBar {...statusBarInfo} />
       <TextInput locked={locked} onSubmit={submit} onQuit={quit} />
     </Box>

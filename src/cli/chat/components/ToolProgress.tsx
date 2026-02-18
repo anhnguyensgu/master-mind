@@ -27,7 +27,7 @@ export function ToolProgress({ item }: { item: ToolItem }) {
       }
 
       return (
-        <Box flexDirection="column" borderStyle="round" borderColor="green" paddingLeft={1} paddingRight={1}>
+        <Box flexDirection="column" borderStyle="round" borderColor="green" paddingLeft={1} paddingRight={1} height={1 + MAX_RESULT_LINES} overflowY="hidden">
           <Text><Text color="green">{'\u2713'} {item.name}</Text> <Text dimColor>({item.durationMs}ms)</Text></Text>
           {lines.map((line, i) => (
             <Text key={i} dimColor>{line}</Text>
@@ -40,7 +40,7 @@ export function ToolProgress({ item }: { item: ToolItem }) {
       const errorLines = item.error.split('\n').slice(0, MAX_RESULT_LINES);
 
       return (
-        <Box flexDirection="column" borderStyle="round" borderColor="red" paddingLeft={1} paddingRight={1}>
+        <Box flexDirection="column" borderStyle="round" borderColor="red" paddingLeft={1} paddingRight={1} height={1 + MAX_RESULT_LINES} overflowY="hidden">
           <Text color="red">{'\u2717'} {item.name}</Text>
           {errorLines.map((line, i) => (
             <Text key={i} color="red">{line}</Text>
