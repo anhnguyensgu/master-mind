@@ -1,5 +1,6 @@
 import { Agent as MastraAgent } from '@mastra/core/agent';
 import type { HookManager } from './plugins/hook-manager';
+import type { ToolCallEvent, ToolResultEvent } from './plugins/plugin.types';
 import type { ConversationManager } from './conversation';
 import type { ChatItem } from '../shared/stream/chatItems';
 import { createStreamParser } from '../shared/stream/streamParser';
@@ -72,6 +73,16 @@ export class Agent {
             parser.flush();
             this.eventHandler.onStreamDelta('');
             toolStartTimes.set(chunk.payload.toolCallId, Date.now());
+
+            if (this.hookManager) {
+              const callEvent: ToolCallEvent = {
+                toolName: chunk.payload.toolName,
+                toolCallId: chunk.payload.toolCallId,
+                args: chunk.payload.args as Record<string, unknown>,
+              };
+              await this.hookManager.runBeforeToolCall(callEvent);
+            }
+
             {
               const inputStr = JSON.stringify(chunk.payload.args, null, 0);
               const truncated = inputStr.length > 100 ? inputStr.slice(0, 97) + '...' : inputStr;
@@ -89,11 +100,25 @@ export class Agent {
               const duration = startTime ? Date.now() - startTime : 0;
               toolStartTimes.delete(chunk.payload.toolCallId);
 
-              const result = chunk.payload.result as { content?: string; isError?: boolean } | undefined;
-              const content = typeof result?.content === 'string' ? result.content : '';
+              const rawResult = chunk.payload.result as { content?: string; isError?: boolean } | undefined;
+              let content = typeof rawResult?.content === 'string' ? rawResult.content : '';
+              let isError = rawResult?.isError ?? false;
+
+              if (this.hookManager) {
+                const resultEvent: ToolResultEvent = {
+                  toolName: chunk.payload.toolName,
+                  toolCallId: chunk.payload.toolCallId,
+                  result: { content, isError },
+                  durationMs: duration,
+                };
+                const transformed = await this.hookManager.runAfterToolResult(resultEvent);
+                content = transformed.result.content;
+                isError = transformed.result.isError;
+              }
+
               const truncatedResult = content.length > 500 ? content.slice(0, 497) + '...' : content;
 
-              if (result?.isError) {
+              if (isError) {
                 this.eventHandler.onItem({
                   type: CHAT_ITEM_TYPE.TOOL_ERROR,
                   name: chunk.payload.toolName,

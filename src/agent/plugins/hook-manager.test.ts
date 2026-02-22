@@ -62,4 +62,100 @@ describe('hook manager', () => {
     const hm = createHookManager();
     expect(await hm.runBeforeMessage('hi')).toBe('hi');
   });
+
+  test('runBeforeToolCall passes event through all plugins', async () => {
+    const hm = createHookManager();
+    hm.register('a', {
+      beforeToolCall: async (e) => ({ ...e, args: { ...e.args, addedByA: true } }),
+    });
+    hm.register('b', {
+      beforeToolCall: async (e) => ({ ...e, args: { ...e.args, addedByB: true } }),
+    });
+
+    const result = await hm.runBeforeToolCall({
+      toolName: 'bash', toolCallId: 'tc1', args: { command: 'ls' },
+    });
+    expect(result).not.toBeNull();
+    expect(result!.args).toEqual({ command: 'ls', addedByA: true, addedByB: true });
+  });
+
+  test('runBeforeToolCall returns null when plugin vetoes', async () => {
+    const hm = createHookManager();
+    hm.register('veto', { beforeToolCall: async () => null });
+
+    const result = await hm.runBeforeToolCall({
+      toolName: 'bash', toolCallId: 'tc1', args: {},
+    });
+    expect(result).toBeNull();
+  });
+
+  test('runBeforeToolCall stops pipeline after veto', async () => {
+    const hm = createHookManager();
+    const called: string[] = [];
+    hm.register('veto', {
+      beforeToolCall: async () => { called.push('veto'); return null; },
+    });
+    hm.register('after', {
+      beforeToolCall: async (e) => { called.push('after'); return e; },
+    });
+
+    await hm.runBeforeToolCall({ toolName: 'x', toolCallId: 'tc1', args: {} });
+    expect(called).toEqual(['veto']); // 'after' was NOT called
+  });
+
+  test('runAfterToolResult transforms result', async () => {
+    const hm = createHookManager();
+    hm.register('redact', {
+      afterToolResult: async (e) => ({
+        ...e,
+        result: { content: e.result.content.replace('secret', '***'), isError: e.result.isError },
+      }),
+    });
+
+    const result = await hm.runAfterToolResult({
+      toolName: 'bash', toolCallId: 'tc1',
+      result: { content: 'the secret is here', isError: false },
+      durationMs: 100,
+    });
+    expect(result.result.content).toBe('the *** is here');
+  });
+
+  test('runAfterToolResult chains multiple plugins', async () => {
+    const hm = createHookManager();
+    hm.register('a', {
+      afterToolResult: async (e) => ({
+        ...e, result: { content: e.result.content + ' [A]', isError: e.result.isError },
+      }),
+    });
+    hm.register('b', {
+      afterToolResult: async (e) => ({
+        ...e, result: { content: e.result.content + ' [B]', isError: e.result.isError },
+      }),
+    });
+
+    const result = await hm.runAfterToolResult({
+      toolName: 'x', toolCallId: 'tc1',
+      result: { content: 'data', isError: false },
+      durationMs: 50,
+    });
+    expect(result.result.content).toBe('data [A] [B]');
+  });
+
+  test('runBeforeToolCall returns event unchanged when no hooks', async () => {
+    const hm = createHookManager();
+    const event = { toolName: 'x', toolCallId: 'tc1', args: { a: 1 } };
+    const result = await hm.runBeforeToolCall(event);
+    expect(result).toEqual(event);
+  });
+
+  test('runAfterToolResult returns event unchanged when no hooks', async () => {
+    const hm = createHookManager();
+    const event = {
+      toolName: 'x', toolCallId: 'tc1',
+      result: { content: 'ok', isError: false },
+      durationMs: 10,
+    };
+    const result = await hm.runAfterToolResult(event);
+    expect(result).toEqual(event);
+  });
 });

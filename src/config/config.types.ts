@@ -28,4 +28,6 @@ export interface MasterMindConfig {
   agent: AgentBehaviorConfig;
   pluginConfigPath?: string;
   permissions?: PermissionsConfig;
+  toolGroups?: string[];
+  toolConfigPath?: string;
 }

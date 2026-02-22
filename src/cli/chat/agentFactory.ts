@@ -14,6 +14,10 @@ import {
   createCostSummaryTool,
   createCostByServiceTool,
 } from '../../agent/tools';
+import { ToolRegistry } from '../../agent/tools/tool-registry';
+import { checkToolRequirements } from '../../agent/tools/tool-conditions';
+import { resolveEnabledGroups } from '../../agent/tools/tool-groups';
+import { loadToolConfig, loadToolsFromConfig } from '../../agent/tools/tool-loader';
 
 export async function buildAgent(
   config: MasterMindConfig,
@@ -21,15 +25,75 @@ export async function buildAgent(
 ): Promise<{ agent: Agent; hookManager: HookManager }> {
   const conversation = createConversationManager();
   const hookManager = createHookManager();
+  const registry = new ToolRegistry();
 
-  await loadPlugins(config, hookManager);
+  // 1. Register built-in tools with metadata
+  registry.register('bash', createBashTool(config.permissions), {
+    group: 'system', source: 'builtin',
+  });
+  registry.register('cost_query', createCostQueryTool(config.costApi), {
+    group: 'cost', source: 'builtin',
+    requires: ['env:COST_API_BASE_URL'],
+  });
+  registry.register('cost_summary', createCostSummaryTool(config.costApi), {
+    group: 'cost', source: 'builtin',
+    requires: ['env:COST_API_BASE_URL'],
+  });
+  registry.register('cost_by_service', createCostByServiceTool(config.costApi), {
+    group: 'cost', source: 'builtin',
+    requires: ['env:COST_API_BASE_URL'],
+  });
+  registry.register('cloud_cli', cloudCliTool, {
+    group: 'cloud', source: 'builtin',
+  });
+  registry.register('resource_list', resourceListTool, {
+    group: 'cloud', source: 'builtin',
+  });
+  registry.register('resource_metrics', resourceMetricsTool, {
+    group: 'cloud', source: 'builtin',
+  });
 
-  const bashTool = createBashTool(config.permissions);
-  const costQueryTool = createCostQueryTool(config.costApi);
-  const costSummaryTool = createCostSummaryTool(config.costApi);
-  const costByServiceTool = createCostByServiceTool(config.costApi);
+  // 2. Load plugin tools into registry
+  const pluginTools = await loadPlugins(config, hookManager);
+  for (const [id, tool] of Object.entries(pluginTools)) {
+    registry.register(id, tool, { group: 'plugin', source: 'plugin' });
+  }
 
-  const toolNames = ['cost_query', 'cost_summary', 'cost_by_service', 'bash', 'cloud_cli', 'resource_list', 'resource_metrics'];
+  // 3. Load user-defined tools from config
+  if (config.toolConfigPath) {
+    const { dirname } = await import('node:path');
+    const specs = await loadToolConfig(config.toolConfigPath);
+    const configDir = dirname(config.toolConfigPath);
+    const userTools = await loadToolsFromConfig(specs, config, configDir);
+    for (const [id, tool] of Object.entries(userTools)) {
+      registry.register(id, tool, { group: 'user', source: config.toolConfigPath });
+    }
+  }
+
+  // 4. Conditional injection: remove tools whose requirements aren't met
+  for (const id of registry.list()) {
+    const meta = registry.getMeta(id);
+    if (meta?.requires) {
+      const reason = await checkToolRequirements(meta.requires);
+      if (reason) {
+        console.error(`[agent] Disabling tool "${id}": ${reason}`);
+        registry.remove(id);
+      }
+    }
+  }
+
+  // 5. Scope by enabled groups
+  const enabledGroups = config.toolGroups ?? resolveEnabledGroups().map(String);
+  for (const id of registry.list()) {
+    const meta = registry.getMeta(id);
+    if (meta && !enabledGroups.includes(meta.group) && meta.group !== 'plugin' && meta.group !== 'user') {
+      registry.remove(id);
+    }
+  }
+
+  // 6. Build agent with filtered tools
+  const allTools = registry.all();
+  const toolNames = registry.list();
   const systemPrompt = buildSystemPrompt(config, toolNames);
 
   const mastraAgent = new MastraAgent({
@@ -37,15 +101,7 @@ export async function buildAgent(
     name: 'Master Mind',
     instructions: systemPrompt,
     model: `${config.llm.provider}/${config.llm.model}` as `${string}/${string}`,
-    tools: {
-      cost_query: costQueryTool,
-      cost_summary: costSummaryTool,
-      cost_by_service: costByServiceTool,
-      bash: bashTool,
-      cloud_cli: cloudCliTool,
-      resource_list: resourceListTool,
-      resource_metrics: resourceMetricsTool,
-    },
+    tools: allTools,
   });
 
   const agent = new Agent(

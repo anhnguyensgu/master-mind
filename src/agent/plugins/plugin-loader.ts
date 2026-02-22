@@ -1,4 +1,5 @@
 import { resolve, dirname } from 'node:path';
+import type { Tool } from '@mastra/core/tools';
 import type { PluginSpec, Plugin, PluginFactory, PluginContext } from './plugin.types';
 import type { MasterMindConfig } from '../../config/config.types';
 import type { HookManager } from './hook-manager';
@@ -46,11 +47,12 @@ async function resolvePlugin(
 export async function loadPlugins(
   config: MasterMindConfig,
   hookManager: HookManager,
-): Promise<void> {
-  if (!config.pluginConfigPath) return;
+): Promise<Record<string, Tool>> {
+  if (!config.pluginConfigPath) return {};
 
   const { specs, configDir } = await loadPluginConfig(config.pluginConfigPath);
   const seenNames = new Set<string>();
+  const pluginTools: Record<string, Tool> = {};
 
   for (const spec of specs) {
     if (spec.enabled === false) continue;
@@ -69,8 +71,21 @@ export async function loadPlugins(
     if (plugin.hooks) {
       hookManager.register(plugin.name, plugin.hooks);
     }
+
+    if (plugin.tools) {
+      for (const [toolId, tool] of Object.entries(plugin.tools)) {
+        if (pluginTools[toolId]) {
+          throw new Error(
+            `Tool "${toolId}" already registered by another plugin (conflict from "${plugin.name}")`,
+          );
+        }
+        pluginTools[toolId] = tool;
+      }
+    }
   }
 
   const context: PluginContext = { config };
   await hookManager.runOnInit(context);
+
+  return pluginTools;
 }

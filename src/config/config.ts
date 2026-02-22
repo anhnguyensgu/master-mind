@@ -39,5 +39,9 @@ export async function loadConfig(): Promise<MasterMindConfig> {
     },
     pluginConfigPath: Bun.env.MASTER_MIND_PLUGIN_CONFIG || undefined,
     permissions: settings.permissions,
+    toolGroups: Bun.env.MASTER_MIND_TOOL_GROUPS
+      ? Bun.env.MASTER_MIND_TOOL_GROUPS.split(',').map(g => g.trim())
+      : undefined,
+    toolConfigPath: Bun.env.MASTER_MIND_TOOL_CONFIG || undefined,
   };
 }

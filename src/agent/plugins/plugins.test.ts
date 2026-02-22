@@ -89,4 +89,87 @@ describe('loadPlugins', () => {
     const msg = await hm.runBeforeMessage('test');
     expect(msg).toBe('test [hooked]');
   });
+
+  test('returns empty record when no config path is set', async () => {
+    const hm = createHookManager();
+    const tools = await loadPlugins(stubConfig, hm);
+    expect(tools).toEqual({});
+  });
+
+  test('collects tools from plugins', async () => {
+    await writeTmpFile(
+      'tool-plugin.ts',
+      `import { createTool } from '@mastra/core/tools';
+      import { z } from 'zod';
+      export default {
+        name: 'tool-provider',
+        tools: {
+          echo: createTool({
+            id: 'echo',
+            description: 'Echoes input',
+            inputSchema: z.object({ text: z.string() }),
+            execute: async ({ context }) => ({ content: context.text }),
+          }),
+        },
+      };`,
+    );
+    const configFile = await writeTmpFile(
+      'tool-plugin-config.ts',
+      `export default [{ path: './tool-plugin.ts' }];`,
+    );
+
+    const hm = createHookManager();
+    const tools = await loadPlugins({ ...stubConfig, pluginConfigPath: configFile }, hm);
+    expect(Object.keys(tools)).toContain('echo');
+    expect(tools.echo.id).toBe('echo');
+  });
+
+  test('rejects duplicate tool ids across plugins', async () => {
+    await writeTmpFile(
+      'dup-tool-a.ts',
+      `import { createTool } from '@mastra/core/tools';
+      import { z } from 'zod';
+      export default {
+        name: 'plugin-a',
+        tools: {
+          my_tool: createTool({ id: 'my_tool', description: 'A', inputSchema: z.object({}), execute: async () => ({}) }),
+        },
+      };`,
+    );
+    await writeTmpFile(
+      'dup-tool-b.ts',
+      `import { createTool } from '@mastra/core/tools';
+      import { z } from 'zod';
+      export default {
+        name: 'plugin-b',
+        tools: {
+          my_tool: createTool({ id: 'my_tool', description: 'B', inputSchema: z.object({}), execute: async () => ({}) }),
+        },
+      };`,
+    );
+    const configFile = await writeTmpFile(
+      'dup-tool-config.ts',
+      `export default [{ path: './dup-tool-a.ts' }, { path: './dup-tool-b.ts' }];`,
+    );
+
+    const hm = createHookManager();
+    await expect(
+      loadPlugins({ ...stubConfig, pluginConfigPath: configFile }, hm),
+    ).rejects.toThrow('Tool "my_tool" already registered');
+  });
+
+  test('returns empty record when no plugins have tools', async () => {
+    await writeTmpFile(
+      'no-tools-plugin.ts',
+      `export default { name: 'no-tools' };`,
+    );
+    const configFile = await writeTmpFile(
+      'no-tools-config.ts',
+      `export default [{ path: './no-tools-plugin.ts' }];`,
+    );
+
+    const hm = createHookManager();
+    const tools = await loadPlugins({ ...stubConfig, pluginConfigPath: configFile }, hm);
+    expect(tools).toEqual({});
+  });
 });
