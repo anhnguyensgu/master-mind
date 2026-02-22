@@ -108,10 +108,10 @@ export function ChatItemView({ item }: { item: ChatItem }) {
       return (
         <Box flexDirection="column">
           <Text>{' '}</Text>
-          <Text color="cyan">          </Text>
-          <Text color="cyan">  {'\u2590\u259b\u2588\u2588\u2588\u259c\u258c'} </Text>
-          <Text color="cyan"> {'\u259d\u259c\u2588\u2588\u2588\u2588\u2588\u259b\u2598'}</Text>
-          <Text color="cyan">   {'\u2598\u2598'} {'\u259d\u259d'}  </Text>
+          <Text color="cyan">{'    \u2597\u2584\u2588\u2588\u2584\u2596'}</Text>
+          <Text color="cyan">{'   \u2590\u2588\u2580  \u2580\u2588\u258c'}</Text>
+          <Text color="cyan">{'   \u2590\u2588\u2584  \u2584\u2588\u258c'}</Text>
+          <Text color="cyan">{'    \u259d\u2580\u2588\u2588\u2580\u2598'}</Text>
           <Text>{' '}</Text>
           <Text><Text bold color="cyan">  Master Mind</Text> <Text dimColor>— Cloud Cost Optimization Agent</Text></Text>
           <Text dimColor>  Type <Text color="white">/help</Text><Text dimColor> for commands, </Text><Text color="white">/quit</Text><Text dimColor> to exit</Text></Text>
