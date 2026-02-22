@@ -47,6 +47,10 @@ export class Agent {
     return this.totalUsage;
   }
 
+  loadMessages(messages: Array<{ role: 'user' | 'assistant'; content: string }>): void {
+    this.messages = [...messages];
+  }
+
   async handleMessage(input: string): Promise<void> {
     const processedInput = this.hookManager
       ? await this.hookManager.runBeforeMessage(input)

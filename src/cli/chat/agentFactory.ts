@@ -1,10 +1,11 @@
 import { Agent as MastraAgent } from '@mastra/core/agent';
 import type { MasterMindConfig } from '../../config/config.types';
 import { Agent, type AgentEventHandler } from '../../agent/agent';
-import { createConversationManager } from '../../agent/conversation';
+import { createConversationManager, createPersistentConversationManager } from '../../agent/conversation';
 import { buildSystemPrompt } from '../../agent/system-prompt';
 import { createHookManager, type HookManager } from '../../agent/plugins/hook-manager';
 import { loadPlugins } from '../../agent/plugins/plugin-loader';
+import type { SessionStore } from '../../agent/session-store';
 import {
   createBashTool,
   cloudCliTool,
@@ -15,13 +16,23 @@ import {
   createCostByServiceTool,
 } from '../../agent/tools';
 
-export async function buildAgent(
-  config: MasterMindConfig,
-  eventHandler: AgentEventHandler,
-): Promise<{ agent: Agent; hookManager: HookManager }> {
-  const conversation = createConversationManager();
-  const hookManager = createHookManager();
+export interface BuildAgentOptions {
+  config: MasterMindConfig;
+  eventHandler: AgentEventHandler;
+  sessionStore?: SessionStore;
+  resumeSessionId?: string;
+}
 
+export interface BuildAgentResult {
+  agent: Agent;
+  hookManager: HookManager;
+  sessionId: string | null;
+}
+
+export async function buildAgent(options: BuildAgentOptions): Promise<BuildAgentResult> {
+  const { config, eventHandler, sessionStore, resumeSessionId } = options;
+
+  const hookManager = createHookManager();
   await loadPlugins(config, hookManager);
 
   const bashTool = createBashTool(config.permissions);
@@ -48,6 +59,21 @@ export async function buildAgent(
     },
   });
 
+  let conversation;
+  let sessionId: string | null = null;
+  let resumedMessages: Array<{ role: 'user' | 'assistant'; content: string }> | null = null;
+
+  if (sessionStore && resumeSessionId) {
+    resumedMessages = sessionStore.getMessages(resumeSessionId);
+    conversation = createPersistentConversationManager(sessionStore, resumeSessionId, resumedMessages);
+    sessionId = resumeSessionId;
+  } else if (sessionStore) {
+    sessionId = sessionStore.createSession(config.llm.provider, config.llm.model);
+    conversation = createPersistentConversationManager(sessionStore, sessionId);
+  } else {
+    conversation = createConversationManager();
+  }
+
   const agent = new Agent(
     mastraAgent,
     conversation,
@@ -57,5 +83,9 @@ export async function buildAgent(
     hookManager,
   );
 
-  return { agent, hookManager };
+  if (resumedMessages) {
+    agent.loadMessages(resumedMessages);
+  }
+
+  return { agent, hookManager, sessionId };
 }

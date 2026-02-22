@@ -29,6 +29,16 @@ export const COMMANDS = {
         aliases: [],
         description: 'Show current model info',
     },
+    CONTINUE: {
+        primary: '/continue',
+        aliases: ['/c'],
+        description: 'Resume the most recent session',
+    },
+    SESSIONS: {
+        primary: '/sessions',
+        aliases: [],
+        description: 'List past conversation sessions',
+    },
 } as const;
 
 export function getAllCommandStrings(cmd: typeof COMMANDS[keyof typeof COMMANDS]): string[] {
